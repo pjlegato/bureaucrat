@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# Bureaucrat project standalone development environment startup script.
+#
+# This is mainly useful for the testing and development of Bureaucrat
+# itself.  Most end users will include Bureaucrat as a
+# dependency in their Immutant project rather than use this.
+#
+# Copyright (C) 2014 Paul Legato. See the LICENSE file for the terms
+# of use.
+#
+
+# Get path to this script, from https://stackoverflow.com/questions/59895/can-a-bash-script-tell-what-directory-its-stored-in
+pushd . > /dev/null
+SCRIPT_PATH="${BASH_SOURCE[0]}";
+if ([ -h "${SCRIPT_PATH}" ]) then
+  while([ -h "${SCRIPT_PATH}" ]) do cd `dirname "$SCRIPT_PATH"`; SCRIPT_PATH=`readlink "${SCRIPT_PATH}"`; done
+fi
+cd `dirname ${SCRIPT_PATH}` > /dev/null
+SCRIPT_PATH=`pwd`;
+popd  > /dev/null
+
+
+#
+# You can override the JVM memory usage settings here by predefining MEMORY_OPTS.
+# For example, you may want this to be much larger on a production server.
+#
+MEMORY_OPTS=${MEMORY_OPTS-" -Xms1g -Xmx1g"}
+ 
+export JAVA_OPTS="$MEMORY_OPTS -server -d64 -XX:+UseCompressedOops -XX:-OmitStackTraceInFastThrow   \
+-Djava.awt.headless=true -Xrunjdwp:transport=dt_socket,address=9111,server=y,suspend=n  \
+-XX:MaxPermSize=256m -XX:NewRatio=4 -XX:SurvivorRatio=8 -Dfile.encoding=utf-8  \
+-XX:+CMSScavengeBeforeRemark -XX:+UseCMSInitiatingOccupancyOnly -XX:+CMSClassUnloadingEnabled  \
+-XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:+DisableExplicitGC"
+
+echo "JAVA_OPTS is:" $JAVA_OPTS
+
+# Change to main Bureaucrat directory
+cd "$SCRIPT_PATH/.."
+echo "Deploying app from " `pwd` "..."
+lein immutant deploy
+
+cd  ~/.immutant/current/jboss
+./bin/standalone.sh
+
+
