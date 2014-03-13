@@ -80,8 +80,7 @@
     (reset! handler-cache
             @(mq/listen (mq/as-queue name)
                        handler-fn
-                       :concurrency concurrency
-                       :xa false)))
+                       :concurrency concurrency)))
 
 
   (registered-listener [component]
