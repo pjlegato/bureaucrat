@@ -8,8 +8,11 @@
 
   * The name field specifies the queue's string name.
 
-  * Handler-cache is an atom used to store the handlers listening to
-    this endpoint, so we can remove them later. Note that these are
+  * Handler-cache is an atom used to store a handler function that will be 
+    invoked in a background thread when messages are available on the queue.
+     It should accept one argument, which is the message being processed.  
+
+    Note that the handler function are
     stored per-instance, not globally, and that the underlying HornetQ
     endpoint is global (i.e. the same underlying queue in HornetQ can
     potentially be shared by many HornetQEndpoint instances.) If you
@@ -20,10 +23,16 @@
   TODO: State machine modelling backend state?"
 
   (:use bureaucrat.endpoint)
-  (:require [com.stuartsierra.component :as component]
+  (:require [immutant.util]
+            [com.stuartsierra.component :as component]
             [immutant.messaging :as mq]
+            [onelog.core        :as log]
             [org.tobereplaced (mapply :refer [mapply])]
             [immutant.messaging.hornetq :as hornetq]))
+
+
+(if-not (immutant.util/in-immutant?)
+  (log/error+ "The test.bureaucrat.endpoints.hornetq endpoint must be run within an Immutant container!"))
 
 
 (defrecord HornetQEndpoint [^String name handler-cache options]
@@ -53,30 +62,36 @@
                 message
                 :ttl ttl))
 
+  (send! [component message]
+     (mq/publish (mq/as-queue name)
+       message))
+
 
   (receive! [component timeout] 
     (mq/receive (mq/as-queue name)
                 :timeout timeout))
 
+  (receive! [component] 
+    (mq/receive (mq/as-queue name)))
 
-  (register-listener!  [component tag handler-fn concurrency]
-    (swap! handler-cache
-           assoc
-           tag
-           @(mq/listen (mq/as-queue name)
+
+  (register-listener!  [component handler-fn concurrency]
+    (unregister-listener! component)
+    (reset! handler-cache
+            @(mq/listen (mq/as-queue name)
                        handler-fn
                        :concurrency concurrency
                        :xa false)))
 
 
-  (registered-listeners [component]
+  (registered-listener [component]
     @handler-cache)
 
 
-  (unregister-listener! [_ tag]
-    (when-let [handler (get @handler-cache tag)]
+  (unregister-listener! [component]
+    (when-let [handler @handler-cache]
       @(mq/unlisten handler)
-      (swap! handler-cache dissoc tag)))
+      (reset! handler-cache nil)))
 
 
   (count-messages [component]
@@ -112,4 +127,11 @@
   ([name options]
       (map->HornetQEndpoint {:name name
                              :options options
-                             :handler-cache (atom {})})))
+                             :handler-cache (atom nil)})))
+
+(defn start-hornetq-endpoint!
+  "Convenience method for those not using the Components library to
+  start services; creates a wrapper around the HornetQ queue with the
+  given name, starts the underlying endpoint, and returns it."
+  ([name] (start-hornetq-endpoint! name nil))
+  ([name options] (component/start (hornetq-endpoint name options))))

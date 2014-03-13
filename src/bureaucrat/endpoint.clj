@@ -47,33 +47,44 @@
      underlying implementation's backend, deleting any messages in the
      queue.")
 
-  (send!    [_ message ttl]
+  (send! 
+    [component message ttl] 
+    [component message]
     "Places the given message onto the endpoint. The message will be
-    destroyed automatically if it is not delivered in ttl milliseconds.")
+    destroyed automatically if it is not delivered in ttl milliseconds.
 
-  (receive! [_ timeout] 
+    The version without a ttl stores the message in the queue
+    indefinitely, or as long as the underlying implementation allows.")
+
+
+  (receive!
+    [component timeout]
+    [component]
     "Blocks the current thread until a message is available on the
-    endpoint for at most timeout milliseconds. Returns the message,
-    or nil if timed out.")
+    endpoint, for at most timeout milliseconds. Returns the message,
+    or nil if timed out.
 
-  (register-listener!  [component tag handler-fn concurrency]
+    The version without a timeout blocks indefinitely, until a message
+    is received.
+
+    See also register-listener! for a non-blocking way to receive messages.")
+
+  (register-listener!  [component handler-fn concurrency]
     "Registers a listener that invokes handler-fn, a function of 1
      argument, in a background thread when a message becomes available
-     on the endpoint. tag uniquely identifies the given handler-fn, so
-     that it may be unregistered later. Any existing listener with
-     that tag will be replaced.
+     on the endpoint. Any existing listener will be replaced.
 
      Concurrency is the number of threads to use for the listener
      functions.")
 
-  (registered-listeners [_]
-    "Returns a collection of currently registered listener tags for
-    the endpoint." )
 
-  (unregister-listener! [_ tag]
-    "Unregisters the listener named by the given tag from the endpoint.")
+  (registered-listener [component]
+    "Returns the currently registered listener function for the endpoint, if any." )
 
-  (count-messages [_]
+  (unregister-listener! [component]
+    "Unregisters the current listener function from the endpoint.")
+
+  (count-messages [component]
     "Returns the number of messages currently queued in the endpoint.")
 
   (purge! [component]

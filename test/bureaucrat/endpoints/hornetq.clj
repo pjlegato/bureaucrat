@@ -73,20 +73,16 @@
         (endpoint/count-messages endpoint) => 0))
 
 
-(fact "listener functions are called when messages are sent"
+(fact "the listener function is called when messages are sent"
       (let [endpoint (component/start (hq/hornetq-endpoint test-queue-name))
             result (atom nil)
             test-message (str "Listener function test message -- " (rand 10000000))]
+        (endpoint/registered-listener endpoint) => nil
         (endpoint/register-listener! endpoint
-                                     :first-test-listener
-                                     (fn [msg] (reset! result msg))
-                                     1)
-        (endpoint/register-listener! endpoint
-                                     :other-test-listener
                                      (fn [msg] (reset! result msg))
                                      1)
         (endpoint/send! endpoint test-message 10000)
-        (keys (endpoint/registered-listeners endpoint)) => (just [:first-test-listener :other-test-listener] :in-any-order)
+        (endpoint/registered-listener endpoint) => truthy
 
         ;; Without this, the checker below may run before the message is
         ;; delivered on heavily loaded boxes
@@ -95,3 +91,34 @@
           (Thread/sleep 200))
 
         @result => test-message))
+
+
+(fact "listener unregistration works"
+      (let [endpoint (component/start (hq/hornetq-endpoint test-queue-name))
+            result (atom nil)
+            test-message (str "Unregistration test message -- " (rand 10000000))
+            second-test-message (str "Unregistration test message -- " (rand 10000000))]
+        (endpoint/registered-listener endpoint) => nil
+        (endpoint/register-listener! endpoint
+                                     (fn [msg] (reset! result msg))
+                                     1)
+        (endpoint/registered-listener endpoint) => truthy
+
+        (endpoint/send! endpoint test-message 10000)
+
+        ;; Without this, the checker below may run before the message is
+        ;; delivered on heavily loaded boxes
+        (while (> 0 (endpoint/count-messages endpoint))
+          (log/info+ "Awaiting message delivery...")
+          (Thread/sleep 200))
+
+        @result => test-message
+        
+        (endpoint/unregister-listener! endpoint)
+        (endpoint/registered-listener endpoint) => nil
+        
+        (endpoint/send! endpoint second-test-message 10000)
+
+        ;; Result should still be the first test-message
+        @result => test-message))
+

@@ -3,7 +3,7 @@
   :url "https://github.com/pjlegato/bureaucrat/"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.6.0-beta2"]
+  :dependencies [[org.clojure/clojure "1.6.0-RC1"]
 
                  [com.stuartsierra/component "0.2.1"]  ;; Software components framework
                  [org.clojars.pjlegato/clansi "1.3.0"] ;; ANSI colorization
