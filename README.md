@@ -70,11 +70,49 @@ Handler got a message: Hello, world!
 #<HornetQTextMessage HornetQMessage[ID:f81d4fae-7dec-11d0-a765-00a0c91e6bf6]:PERSISTENT>
 ````
 
+### Utility functions
+
+You can count the messages currently in a queue, and unconditionally
+purge all messages in the queue.
+
+````
+user> (endpoint/count-messages queue)
+1
+user> (endpoint/purge! queue)
+1
+user> (endpoint/count-messages queue)
+0
+````
+
 ## IronMQ Backend
 TODO.
 
 ## API Router
 TODO.
+
+## Component / Lifecycle Architecture
+
+Bureaucrat's backend message queue adapters are implemented as
+components within Stuart Sierra's
+["Component"](https://github.com/stuartsierra/component) software
+component lifecycle management framework. The use of this framework in
+your code is entirely optional; Bureaucrat will work fine without it.
+
+Each Bureaucrat component provides a constructor that returns an uninitialized
+component as well as a convenience method that returns an initialized
+component. The uninitialized version is to be used with the Component
+lifecycle management library; Component will start and stop it
+automatically. The initialized version returned by the convenience
+method can be used directly in cases where Component is not in use.
+
+For example, `bureaucrat.endpoints.hornetq/hornetq-endpoint` returns a
+record that has not yet been connected to the HornetQ backend. This
+can be incorporated into Component orchestrations directly, like any
+other. If you are not using Component in your program, you should
+instead use the convenience method
+`bureaucrat.endpoints.hornetq/start-hornetq-endpoint!`, which creates
+the HornetQ adapter component and also starts it for you (that is,
+connects it to the HornetQ backend.)
 
 
 ## License
