@@ -56,7 +56,7 @@ nil
 No message was sent during the 1 second window, so `receive!` returned
 nil.
 
-### Asynchronous receipt
+### Asynchronous Message Receipt
 
 To receive messages asynchronously, we can register a handler function
 on the queue. When a message becomes available, the handler will be
@@ -69,6 +69,54 @@ user> (endpoint/send! queue "Hello, world!")
 Handler got a message: Hello, world!
 #<HornetQTextMessage HornetQMessage[ID:f81d4fae-7dec-11d0-a765-00a0c91e6bf6]:PERSISTENT>
 ````
+
+### XA Transactions
+Your handler function demarcates an
+[XA distributed transaction](http://immutant.org/documentation/current/messaging.html#sec-3-2-1). In
+short, all XA operations in the transaction either fail or succeed
+atomically. If your handler (or any other XA participant) throws an
+exception, the entire XA transaction will be aborted, all XA
+operations participating in the transaction will be rolled back, and
+the message will be placed back on the queue for some other handler to
+handle. If all participants succeed, all of the XA operations will be
+applied.
+
+Any HornetQ messages you generate in the handler function will be
+participants in the XA transaction, as well as database access
+performed through XA-compatible JDBC drivers.
+
+### The Dead Letter Queue
+
+We want message delivery to be retried in cases where the failure is
+transitory and not related to the message as such. For example, if a
+particular processor node's server hardware fails or if someone
+accidentally kills a server process while it's attempting to process a
+message, we want the message to be replayed somewhere else.
+
+If, however, a particular message is unprocessable by our code due to
+some bug, there is no point in retrying the message forever since
+it'll just fail again. Obvious bugs in message processors are
+usually caught prior to production deploys (you have tests, right?),
+but there are sometimes subtle bugs that are only triggered by certain
+messages. That is, the message processor will usually work fine, but
+occasionally some specific messages trigger a bug in the handler code
+that throws an exception. Such messages are called "poison messages."
+
+HornetQ deals with poison message detection by retrying the delivery
+some fixed number of times (10 by default). If message delivery still
+fails after that, the message is diverted to a special "dead letter
+queue" instead of its intended destination, to prevent endless cycles
+of bug triggering. The system operators are expected to monitor the
+dead letter queue and fix the bug.
+
+Every HornetQ system defines a default systemwide dead letter queue
+called "DLQ". (Specific queues can
+[http://immutant.org/builds/LATEST/html-docs/messaging.html#sec-2-3](optionally
+override that) and define their own dead letter queue if they want.)
+
+You can retrieve the DLQ associated with a particular queue with
+`bureaucrat.endpoint/dead-letter-queue`. It returns an ordinary queue
+component which you can read like any other.
 
 ### Utility functions
 

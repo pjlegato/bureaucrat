@@ -20,6 +20,7 @@
     its listeners, its listeners will still remain attached to the
     underlying HornetQ queue!
 
+  TODO: Configurable DLQ per queue rather than a systemwide one?
   TODO: State machine modelling backend state?"
 
   (:use bureaucrat.endpoint)
@@ -30,6 +31,7 @@
             [org.tobereplaced (mapply :refer [mapply])]
             [immutant.messaging.hornetq :as hornetq]))
 
+(def dlq-name "DLQ")
 
 (if-not (immutant.util/in-immutant?)
   (log/error+ "The test.bureaucrat.endpoints.hornetq endpoint must be run within an Immutant container!"))
@@ -44,6 +46,17 @@
 
   (create-in-backend! [component options]
     ;; Idempotent
+
+    ;; Due to an apparent bug in JBoss AS7's default config files, the
+    ;; default dead letter queue is not created when the container is
+    ;; started, so we must create it ourselves.
+    ;;
+    ;; https://community.jboss.org/message/649386 is the only
+    ;; reference I can find to this.
+    (or (= name dlq-name) ;; don't try to create a seperate DLQ if this is the DLQ that we're trying to create!
+        (get component :dlq)
+        (assoc component :dlq (start-hornetq-endpoint! dlq-name)))
+
     (or (lookup component)
         (if options
           (mapply mq/start (mq/as-queue name) options)
@@ -97,6 +110,9 @@
     (some-> (lookup component)
             (.countMessages "")))
 
+  (dead-letter-queue [component]
+    (start-hornetq-endpoint! dlq-name))
+
 
   (purge! [component]
     "Unconditionally deletes all pending messages from the queue."
@@ -127,6 +143,7 @@
       (map->HornetQEndpoint {:name name
                              :options options
                              :handler-cache (atom nil)})))
+
 
 (defn start-hornetq-endpoint!
   "Convenience method for those not using the Components library to

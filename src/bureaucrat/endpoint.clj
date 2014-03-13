@@ -88,6 +88,13 @@
     "Returns the number of messages currently queued in the endpoint.")
 
   (purge! [component]
-    "Unconditionally deletes all pending messages from the queue."))
+    "Unconditionally deletes all pending messages from the queue.")
+
+  (dead-letter-queue [component]
+    "Returns the component that is the dead letter queue associated
+    with the given component's queue."))
+
+
+
 
 
