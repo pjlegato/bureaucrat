@@ -2,11 +2,20 @@
   "Implementation of the IEndpoint protocol for Immutant's HornetQ
   message queue.
 
+  User Documentation
+  ==================
 
-  Internal Documentation for Developers
-  -----------
+  The name field specifies the queue's string name.
 
-  * The name field specifies the queue's string name.
+  Options may be nil, or it may be a map of
+  [http://immutant.org/documentation/current/apidoc/immutant.messaging.html#var-start](Immutant
+  HornetQ options). The options you provide will be passed through directly to
+  `immutant.messaging/start`.
+
+
+  Internal Documentation for Library Developers
+  =============================================
+
 
   * Handler-cache is an atom used to store a handler function that will be 
     invoked in a background thread when messages are available on the queue.
@@ -129,8 +138,8 @@
 
 
   (stop [component]
-    ;; Idempotent
-    (destroy-in-backend! component)
+    ;; No-op; we do not destroy the queue in the backend just because
+    ;; the component is stoped, in case something else is using it.
     component))
 
 
