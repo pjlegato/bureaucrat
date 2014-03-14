@@ -1,4 +1,4 @@
-(ns org.paullegato.bureaucrat.endpoints.ironmq
+(ns com.paullegato.bureaucrat.endpoints.ironmq
   "Implementation of the IEndpoint protocol for IronMQ.
 
    * Be aware that these functions throw exceptions if the network is down, 
@@ -50,7 +50,7 @@
          them and shut them down. That needs a better solution.
 "
 
-  (:use org.paullegato.bureaucrat.endpoint)
+  (:use com.paullegato.bureaucrat.endpoint)
   (:require [immutant.util]
 
             [com.stuartsierra.component :as component]

@@ -1,4 +1,4 @@
-(ns org.paullegato.bureaucrat.endpoint
+(ns com.paullegato.bureaucrat.endpoint
   "The IEndpoint protocol defines a type with a set of operations for
   interacting with a generic MQ-like asynchronous communications
   endpoint.

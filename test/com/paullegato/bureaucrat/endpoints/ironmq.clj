@@ -1,10 +1,10 @@
-(ns test.bureaucrat.endpoints.ironmq
+(ns test.com.paullegato.bureaucrat.endpoints.ironmq
   "Tests for the IronMQ implementation of IQueueEndpoint."
   (:use midje.sweet)  
   (:require [com.stuartsierra.component   :as component]
-            [bureaucrat.endpoints.ironmq :as im]
+            [com.paullegato.bureaucrat.endpoints.ironmq :as im]
 
-            [bureaucrat.endpoint :as e]
+            [com.paullegato.bureaucrat.endpoint :as e]
             [onelog.core         :as log]))
 
 

@@ -1,20 +1,20 @@
-(ns test.bureaucrat.endpoints.hornetq
+(ns test.com.paullegato.bureaucrat.endpoints.hornetq
   "Tests for the HornetQ implementation of IQueueEndpoint.
 
    These tests must be run within "
   (:use midje.sweet)  
   (:require [immutant.util]
             [com.stuartsierra.component   :as component]
-            [bureaucrat.endpoints.hornetq :as hq]
+            [com.paullegato.bureaucrat.endpoints.hornetq :as hq]
 
-            [bureaucrat.endpoint :as queue]
+            [com.paullegato.bureaucrat.endpoint :as queue]
             [onelog.core         :as log]
             [immutant.messaging  :as mq]
             [immutant.messaging.hornetq]))
 
 
 (if-not (immutant.util/in-immutant?)
-  (log/error+ "The  test.bureaucrat.endpoints.hornetq tests must be run within an Immutant container in order to test HornetQ integration!"))
+  (log/error+ "The  test.com.paullegato.bureaucrat.endpoints.hornetq tests must be run within an Immutant container in order to test HornetQ integration!"))
 
 
 (def test-queue-name "test.queue")
