@@ -29,6 +29,7 @@
     its listeners, its listeners will still remain attached to the
     underlying HornetQ queue!
 
+  TODO: Implement receive-batch!
   TODO: Configurable DLQ per queue rather than a systemwide one?
   TODO: State machine modelling backend state?"
 
@@ -45,7 +46,7 @@
 (if-not (immutant.util/in-immutant?)
   (log/error+ "The test.bureaucrat.endpoints.hornetq endpoint must be run within an Immutant container!"))
 
-
+(declare start-hornetq-endpoint!)
 (defrecord HornetQEndpoint [^String name handler-cache options]
   IQueueEndpoint
 
@@ -124,7 +125,6 @@
 
 
   (purge! [component]
-    "Unconditionally deletes all pending messages from the queue."
     (some-> (lookup component)
             (.removeMessages "")))
 

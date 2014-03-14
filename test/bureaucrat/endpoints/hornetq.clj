@@ -10,13 +10,15 @@
             [bureaucrat.endpoint :as queue]
             [onelog.core         :as log]
             [immutant.messaging  :as mq]
-            [immutant.messaging.hornetq]
-))
+            [immutant.messaging.hornetq]))
+
 
 (if-not (immutant.util/in-immutant?)
   (log/error+ "The  test.bureaucrat.endpoints.hornetq tests must be run within an Immutant container in order to test HornetQ integration!"))
 
+
 (def test-queue-name "test.queue")
+
 
 (defn- reset-test-queue!
   "Ensure that the test queue is empty of any persistent messages and
@@ -84,8 +86,8 @@
 
         ;; Without this, the checker below may run before the message is
         ;; delivered on heavily loaded boxes
-        (while (> 0 (queue/count-messages endpoint))
-          (log/info+ "Awaiting message delivery...")
+        (while (> (queue/count-messages endpoint) 0)
+          (log/info+ "Awaiting message delivery in HornetQ test...")
           (Thread/sleep 200))
 
         @result => test-message))

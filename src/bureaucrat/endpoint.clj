@@ -6,6 +6,8 @@
   Concrete connectors are provided in the bureaucrat.endpoints
   package.
 
+  TODO: Send messages in batches.
+  TODO: Retrieve without auto-acknowledge
   TODO: Support topics in addition to queues?")
 
 ;;
@@ -54,7 +56,8 @@
     destroyed automatically if it is not delivered in ttl milliseconds.
 
     The version without a ttl stores the message in the queue
-    indefinitely, or as long as the underlying implementation allows.")
+    indefinitely, or as long as the underlying implementation allows.
+    Specifying a ttl of 0 is equivalent to not using a ttl.")
 
 
   (receive!
@@ -69,13 +72,26 @@
 
     See also register-listener! for a non-blocking way to receive messages.")
 
+
+  (receive-batch! [component size]
+    "Attempts to Receives up to size messages from the backend in a batch.
+     Fewer than size messages may be returned if size messages are not
+     immediately available. The messages are acknowledged/deleted from
+     the backend. Does not block.
+
+     The maximum allowed size is implementation-dependent.")
+
+
   (register-listener!  [component handler-fn concurrency]
     "Registers a listener that invokes handler-fn, a function of 1
      argument, in a background thread when a message becomes available
      on the endpoint. Any existing listener will be replaced.
 
      Concurrency is the number of threads to use for the listener
-     functions.")
+     functions. If you require strict serial processing of
+     messages (and your backend supports strict in-order delivery),
+     set this to 1. If you don't need serial processing, you can get
+     better performance by using more threads here.")
 
 
   (registered-listener [component]
@@ -92,7 +108,11 @@
 
   (dead-letter-queue [component]
     "Returns the component that is the dead letter queue associated
-    with the given component's queue."))
+    with the given component's queue.
+
+    Note that IronMQ does not support dead letter queues as of the
+    time this was written, so don't rely on them if you're using
+    IronMQ!"))
 
 
 
