@@ -1,4 +1,4 @@
-(ns bureaucrat.endpoints.hornetq
+(ns org.paullegato.bureaucrat.endpoints.hornetq
   "Implementation of the IEndpoint protocol for Immutant's HornetQ
   message queue.
 
@@ -33,7 +33,7 @@
   TODO: Configurable DLQ per queue rather than a systemwide one?
   TODO: State machine modelling backend state?"
 
-  (:use bureaucrat.endpoint)
+  (:use org.paullegato.bureaucrat.endpoint)
   (:require [immutant.util]
             [com.stuartsierra.component :as component]
             [immutant.messaging :as mq]
@@ -44,7 +44,7 @@
 (def dlq-name "DLQ")
 
 (if-not (immutant.util/in-immutant?)
-  (log/error+ "The test.bureaucrat.endpoints.hornetq endpoint must be run within an Immutant container!"))
+  (log/error+ "The code inorg.paullegato.bureaucrat.endpoints.hornetq must be run within an Immutant container!"))
 
 (declare start-hornetq-endpoint!)
 (defrecord HornetQEndpoint [^String name handler-cache options]
