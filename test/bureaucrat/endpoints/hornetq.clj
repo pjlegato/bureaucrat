@@ -32,14 +32,12 @@
                           (after :facts (reset-test-queue!))])
 
 
-(fact "endpoints can be created and destroyed with the constructor function"
+(fact "endpoints can be created by starting the component"
       (let [endpoint (hq/hornetq-endpoint test-queue-name)]
         (record? endpoint) => true
         (immutant.messaging.hornetq/destination-controller test-queue-name) => nil
         (component/start endpoint) => truthy
-        (immutant.messaging.hornetq/destination-controller test-queue-name) => truthy
-        (component/stop endpoint) => truthy
-        (immutant.messaging.hornetq/destination-controller test-queue-name) => nil))
+        (immutant.messaging.hornetq/destination-controller test-queue-name) => truthy))
 
 
 (fact "endpoints can send and receive messages"
