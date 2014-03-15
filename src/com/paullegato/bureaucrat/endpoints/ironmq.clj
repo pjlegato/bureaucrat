@@ -64,6 +64,7 @@
             [org.tobereplaced (mapply :refer [mapply])])
   (:import [io.iron.ironmq Client Queue Cloud EmptyQueueException]))
 
+(declare start-ironmq-endpoint!)
 
 ;; How long to sleep between poll cycles, in ms
 (def poll-sleep-time 500)
@@ -359,6 +360,14 @@
                             :options options
                             :poller-batch-size 100
                             :iron-cache (atom {})})))
+
+
+(defn start-ironmq-endpoint!
+  "Convenience method for those not using the Components library to
+  start services; creates a wrapper around the Ironmq queue with the
+  given name, starts the underlying endpoint, and returns it."
+  ([name] (start-ironmq-endpoint! name nil))
+  ([name options] (component/start (ironmq-endpoint name options))))
 
 
 (defn start-ironmq-endpoint!

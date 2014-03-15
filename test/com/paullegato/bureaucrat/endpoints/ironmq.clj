@@ -3,8 +3,7 @@
   (:use midje.sweet)  
   (:require [com.stuartsierra.component   :as component]
             [com.paullegato.bureaucrat.endpoints.ironmq :as im]
-
-            [com.paullegato.bureaucrat.endpoint :as e]
+            [com.paullegato.bureaucrat.endpoint :as queue]
             [onelog.core         :as log]))
 
 
