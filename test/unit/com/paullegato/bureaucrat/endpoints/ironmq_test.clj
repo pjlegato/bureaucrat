@@ -1,7 +1,7 @@
-(ns com.paullegato.bureaucrat.endpoints.ironmq-test
+(ns unit.com.paullegato.bureaucrat.endpoints.ironmq-test
   "Tests for the IronMQ implementation of IQueueEndpoint."
   (:use [midje.sweet]
-        [com.paullegato.bureaucrat.test-helpers])
+        [helpers.bureaucrat.test-helpers])
   (:require [com.stuartsierra.component   :as component]
             [com.paullegato.bureaucrat.endpoints.ironmq :as im]
             [com.paullegato.bureaucrat.endpoint :as queue]
@@ -65,7 +65,10 @@
         (queue/count-messages endpoint) => 4
 
         (queue/purge! endpoint)
-        (Thread/sleep 2000)
+
+        ;; Await processing by IronMQ
+        (spin-on #(= 0 (queue/count-messages endpoint)))
+
         (queue/count-messages endpoint) => 0))
 
 

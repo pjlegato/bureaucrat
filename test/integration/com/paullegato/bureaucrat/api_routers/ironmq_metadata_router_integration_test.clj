@@ -1,24 +1,19 @@
-(ns integration.com.paullegato.bureaucrat.api-routers.ironmq-table-router-integration-test
-  "Exercises the table API router in conjunction with a IronMQ endpoint"
-  (:use [midje.sweet]
-        [com.paullegato.bureaucrat.api-routers.table-api-router]
-        [com.paullegato.bureaucrat.test-helpers])
-  (:require [com.paullegato.bureaucrat.endpoints.ironmq :as im]
+(ns integration.com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test
+  "Exercises the metadata API router in conjunction with a IronMQ endpoint"
+  (:require [com.paullegato.bureaucrat.endpoints.ironmq :as hq]
             [com.paullegato.bureaucrat.api-router :as router]
             [com.paullegato.bureaucrat.endpoint :as queue]
-            [onelog.core :as log]))
+            [onelog.core :as log])
+  (:use [midje.sweet]
+        [com.paullegato.bureaucrat.api-routers.metadata-api-router]
+        [helpers.bureaucrat.test-helpers]))
 
 (def test-queue-name "test.queue")
-
-(namespace-state-changes [(before :facts (do (reset-queue! test-queue-name)
-                                             (reset! last-result nil)))
-                          (after  :facts (reset-queue! test-queue-name))])
-
-
 (def last-result (atom nil))
 
+(namespace-state-changes [(before :facts (reset! last-result nil))])
 
-(defn allowed-test-handler
+(defn ^:api allowed-test-handler
   [message]
   (reset! last-result message))
 
@@ -27,15 +22,13 @@
   [message]
   (reset! last-result message))
 
-(def routes {:foo allowed-test-handler})
-
 
 (fact "API handlers are called properly from Ironmq source queues"
-      (let [router   (table-api-router routes)
-            endpoint (im/start-ironmq-endpoint! test-queue-name)
+      (let [router   (metadata-api-router "integration.com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test/")
+            endpoint (hq/start-ironmq-endpoint! test-queue-name)
             dlq      (queue/dead-letter-queue endpoint)
-            test-message (str "IM/router integration test message -- " (rand 10000000))
-            second-test-message (str "IM/router integration test message -- " (rand 10000000))]
+            test-message (str "HQ/router integration test message -- " (rand 10000000))
+            second-test-message (str "HQ/router integration second test message -- " (rand 10000000))]
 
         (queue/purge! dlq)
 
@@ -45,23 +38,25 @@
                                       (router/process-message! router message))
                                     1)
 
-          (queue/send! endpoint {:call :foo
+          (queue/send! endpoint {:call "allowed-test-handler"
                                  :payload test-message})
           ;; Await delivery
           (spin-on #(= 0 (queue/count-messages endpoint)))
+          (Thread/sleep 300)
 
           ;; Success!
           @last-result => test-message
 
-          ;; try to send to a forbidden function:
+          ;; Try to send to a forbidden function:
           (queue/send! endpoint {:call "forbidden-test-handler"
                                  :payload second-test-message})
           ;; Await delivery
           (spin-on #(= 0 (queue/count-messages endpoint)))
+          (Thread/sleep 300)
+
           @last-result => test-message
           
           ;; Make sure invalid API call went to the DLQ:
-          (spin-on #(< 0 (queue/count-messages endpoint)))
           (queue/receive! dlq 10000) => (contains {:payload second-test-message})
 
           ;; Try to send to a nonexistent function:
@@ -69,9 +64,11 @@
                                  :payload second-test-message})
           ;; Await delivery
           (spin-on #(= 0 (queue/count-messages endpoint)))
+          (Thread/sleep 300)
+
           @last-result => test-message
           
-          ;; ;; Make sure invalid API call went to the DLQ:
-          (spin-on #(< 0 (queue/count-messages endpoint)))
+          ;; Make sure invalid API call went to the DLQ:
           (queue/receive! dlq 10000) => (contains {:payload second-test-message})
           (finally (queue/unregister-listener! endpoint)))))
+

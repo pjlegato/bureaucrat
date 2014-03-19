@@ -1,9 +1,9 @@
-(ns com.paullegato.bureaucrat.endpoints.hornetq-test
+(ns unit.com.paullegato.bureaucrat.endpoints.hornetq-test
   "Tests for the HornetQ implementation of IQueueEndpoint.
 
    These tests must be run within "
   (:use [midje.sweet]
-        [com.paullegato.bureaucrat.test-helpers])  
+        [helpers.bureaucrat.test-helpers])  
   (:require [immutant.util]
             [com.stuartsierra.component   :as component]
             [com.paullegato.bureaucrat.endpoints.hornetq :as hq]

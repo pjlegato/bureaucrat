@@ -1,8 +1,8 @@
-(ns com.paullegato.bureaucrat.api-routers.metadata-api-router-test
+(ns unit.com.paullegato.bureaucrat.api-routers.metadata-api-router-test
   (:use [midje.sweet]
         [com.paullegato.bureaucrat.api-router]
         [com.paullegato.bureaucrat.api-routers.metadata-api-router]
-        [com.paullegato.bureaucrat.test-helpers])
+        [helpers.bureaucrat.test-helpers])
   (:require [onelog.core :as log]))
 
 (def last-result (atom nil))
@@ -20,7 +20,7 @@
 
 
 (fact "metadata-api-routers look up functions successfully"
-      (let [router (metadata-api-router "com.paullegato.bureaucrat.api-routers.metadata-api-router-test/")]
+      (let [router (metadata-api-router "unit.com.paullegato.bureaucrat.api-routers.metadata-api-router-test/")]
 
         (handler-for-call router "allowed-test-handler") => allowed-test-handler
         (handler-for-call router "forbidden-test-handler") => nil
@@ -28,7 +28,7 @@
 
 
 (fact "handler functions are called properly"
-      (let [router (metadata-api-router "com.paullegato.bureaucrat.api-routers.metadata-api-router-test/")
+      (let [router (metadata-api-router "unit.com.paullegato.bureaucrat.api-routers.metadata-api-router-test/")
             test-message (str "Router test message -- " (rand 10000000))
             second-test-message (str "Other router test message -- " (rand 10000000))]
 

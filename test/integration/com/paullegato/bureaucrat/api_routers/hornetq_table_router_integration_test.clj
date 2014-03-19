@@ -1,8 +1,8 @@
-(ns integration.com.paullegato.bureaucrat.api-routers.hornetq-metadata-router-integration-test
-  "Exercises the metadata API router in conjunction with a HornetQ endpoint"
+(ns integration.com.paullegato.bureaucrat.api-routers.hornetq-table-router-integration-test
+  "Exercises the table API router in conjunction with a HornetQ endpoint"
   (:use [midje.sweet]
-        [com.paullegato.bureaucrat.api-routers.metadata-api-router]
-        [com.paullegato.bureaucrat.test-helpers])
+        [com.paullegato.bureaucrat.api-routers.table-api-router]
+        [helpers.bureaucrat.test-helpers])
   (:require [com.paullegato.bureaucrat.endpoints.hornetq :as hq]
             [com.paullegato.bureaucrat.api-router :as router]
             [com.paullegato.bureaucrat.endpoint :as queue]
@@ -10,15 +10,15 @@
 
 (def test-queue-name "test.queue")
 
-(namespace-state-changes [(before :facts (reset-queue! test-queue-name))
+(namespace-state-changes [(before :facts (do (reset-queue! test-queue-name)
+                                             (reset! last-result nil)))
                           (after  :facts (reset-queue! test-queue-name))])
 
 
 (def last-result (atom nil))
 
-(namespace-state-changes [(before :facts (reset! last-result nil))])
 
-(defn ^:api allowed-test-handler
+(defn allowed-test-handler
   [message]
   (reset! last-result message))
 
@@ -27,9 +27,11 @@
   [message]
   (reset! last-result message))
 
+(def routes {:foo allowed-test-handler})
+
 
 (fact "API handlers are called properly from HornetQ source queues"
-      (let [router   (metadata-api-router "com.paullegato.bureaucrat.api-routers.hornetq-metadata-router-integration-test/")
+      (let [router   (table-api-router routes)
             endpoint (hq/start-hornetq-endpoint! test-queue-name)
             dlq      (queue/dead-letter-queue endpoint)
             test-message (str "HQ/router integration test message -- " (rand 10000000))
@@ -41,7 +43,7 @@
                                     (router/process-message! router message))
                                   1)
 
-        (queue/send! endpoint {:call "allowed-test-handler"
+        (queue/send! endpoint {:call :foo
                                :payload test-message})
         ;; Await delivery
         (spin-on #(= 0 (queue/count-messages endpoint)))
@@ -68,7 +70,3 @@
         
         ;; Make sure invalid API call went to the DLQ:
         (queue/receive! dlq 10000) => (contains {:payload second-test-message})))
-
-
-
-

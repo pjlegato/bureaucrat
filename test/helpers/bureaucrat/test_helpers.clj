@@ -1,4 +1,4 @@
-(ns com.paullegato.bureaucrat.test-helpers
+(ns helpers.bureaucrat.test-helpers
   "Utility functions for use in tests."
   (:require [immutant.messaging  :as mq]))
 

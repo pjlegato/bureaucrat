@@ -1,8 +1,8 @@
-(ns com.paullegato.bureaucrat.api-routers.table-api-router-test
+(ns unit.com.paullegato.bureaucrat.api-routers.table-api-router-test
   (:use [midje.sweet]
         [com.paullegato.bureaucrat.api-router]
         [com.paullegato.bureaucrat.api-routers.table-api-router]
-        [com.paullegato.bureaucrat.test-helpers])
+        [helpers.bureaucrat.test-helpers])
   (:require [onelog.core :as log]))
 
 
