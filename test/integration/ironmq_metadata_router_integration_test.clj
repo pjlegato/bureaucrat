@@ -1,4 +1,4 @@
-(ns com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test
+(ns integration.com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test
   "Exercises the metadata API router in conjunction with a IronMQ endpoint"
   (:require [com.paullegato.bureaucrat.endpoints.ironmq :as hq]
             [com.paullegato.bureaucrat.api-router :as router]

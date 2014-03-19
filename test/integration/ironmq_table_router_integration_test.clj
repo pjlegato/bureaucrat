@@ -1,4 +1,4 @@
-(ns com.paullegato.bureaucrat.api-routers.ironmq-table-router-integration-test
+(ns integration.com.paullegato.bureaucrat.api-routers.ironmq-table-router-integration-test
   "Exercises the table API router in conjunction with a IronMQ endpoint"
   (:use [midje.sweet]
         [com.paullegato.bureaucrat.api-routers.table-api-router]
