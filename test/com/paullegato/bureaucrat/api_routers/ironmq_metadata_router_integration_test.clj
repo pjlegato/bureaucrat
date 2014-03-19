@@ -1,12 +1,12 @@
 (ns com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test
   "Exercises the metadata API router in conjunction with a IronMQ endpoint"
-  (:use [midje.sweet]
-        [com.paullegato.bureaucrat.api-routers.metadata-api-router]
-        [com.paullegato.bureaucrat.test-helpers])
   (:require [com.paullegato.bureaucrat.endpoints.ironmq :as hq]
             [com.paullegato.bureaucrat.api-router :as router]
             [com.paullegato.bureaucrat.endpoint :as queue]
-            [onelog.core :as log]))
+            [onelog.core :as log])
+  (:use [midje.sweet]
+        [com.paullegato.bureaucrat.api-routers.metadata-api-router]
+        [com.paullegato.bureaucrat.test-helpers]))
 
 (def test-queue-name "test.queue")
 (def last-result (atom nil))
@@ -28,7 +28,7 @@
             endpoint (hq/start-ironmq-endpoint! test-queue-name)
             dlq      (queue/dead-letter-queue endpoint)
             test-message (str "HQ/router integration test message -- " (rand 10000000))
-            second-test-message (str "HQ/router integration test message -- " (rand 10000000))]
+            second-test-message (str "HQ/router integration second test message -- " (rand 10000000))]
 
         (queue/purge! dlq)
 
@@ -42,6 +42,7 @@
                                  :payload test-message})
           ;; Await delivery
           (spin-on #(= 0 (queue/count-messages endpoint)))
+          (Thread/sleep 300)
 
           ;; Success!
           @last-result => test-message
@@ -51,6 +52,8 @@
                                  :payload second-test-message})
           ;; Await delivery
           (spin-on #(= 0 (queue/count-messages endpoint)))
+          (Thread/sleep 300)
+
           @last-result => test-message
           
           ;; Make sure invalid API call went to the DLQ:
@@ -61,6 +64,8 @@
                                  :payload second-test-message})
           ;; Await delivery
           (spin-on #(= 0 (queue/count-messages endpoint)))
+          (Thread/sleep 300)
+
           @last-result => test-message
           
           ;; Make sure invalid API call went to the DLQ:

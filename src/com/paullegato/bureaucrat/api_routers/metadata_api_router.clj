@@ -15,11 +15,11 @@
    \"some-function\" and \"other-function\" as their calls. (Don't
    forget the trailing slash!)
 "
+  (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
+            [onelog.core :as log])
   (:use [com.paullegato.bureaucrat.api-router]
         [com.paullegato.bureaucrat.endpoint]
-        [slingshot.slingshot :only [try+ throw+]])
-  (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
-            [onelog.core :as log]))
+        [slingshot.slingshot :only [try+ throw+]]))
 
 
 (defrecord MetadataAPIRouter

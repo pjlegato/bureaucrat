@@ -1,9 +1,9 @@
 (ns com.paullegato.bureaucrat.api-routers.api-router-helpers
   "Utility functions shared by multiple API router implementations."
+  (:require [com.paullegato.bureaucrat.api-router :as api-router]
+            [onelog.core :as log])
   (:use [com.paullegato.bureaucrat.endpoint]
-        [slingshot.slingshot :only [try+ throw+]])
-  (:require  [com.paullegato.bureaucrat.api-router :as api-router]
-             [onelog.core :as log]))
+        [slingshot.slingshot :only [try+ throw+]]))
 
 
 (defn try-handler
