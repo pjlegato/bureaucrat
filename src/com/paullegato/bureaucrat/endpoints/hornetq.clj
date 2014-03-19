@@ -85,12 +85,12 @@
 
   (send! [component message ttl]
     (mq/publish (mq/as-queue name)
-                message
+                (normalize-egress *message-normalizer* message)
                 :ttl ttl))
 
   (send! [component message]
      (mq/publish (mq/as-queue name)
-       message))
+                 (normalize-egress *message-normalizer* message)))
 
 
   (receive! [component timeout] 

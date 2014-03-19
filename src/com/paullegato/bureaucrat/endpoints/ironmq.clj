@@ -342,7 +342,7 @@
                                    messages)))
 
                  ;; TODO configurable poll interval
-                 (Thread/sleep 5000)
+                 (Thread/sleep 2000)
 
                  (if (:should-halt @iron-cache)
                    (log/info "[bureaucrat][ironmq] Background poller got halt notice, stopping.")

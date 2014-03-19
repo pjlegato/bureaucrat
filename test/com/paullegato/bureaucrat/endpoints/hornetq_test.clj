@@ -20,19 +20,8 @@
 
 (def test-queue-name "test.queue")
 
-
-(defn- reset-test-queue!
-  "Ensure that the test queue is empty of any persistent messages and
-   does not exist in the backend, in case it leaks out of a failed
-   test run."
-  []
- (let [queue (mq/as-queue test-queue-name)] 
-                                           (mq/start queue)
-                                           (.removeMessages (immutant.messaging.hornetq/destination-controller queue) "")
-                                           (mq/stop queue :force true)))
-
-(namespace-state-changes [(before :facts (reset-test-queue!))
-                          (after :facts (reset-test-queue!))])
+(namespace-state-changes [(before :facts (reset-queue! test-queue-name))
+                          (after  :facts (reset-queue! test-queue-name))])
 
 
 (fact "endpoints can be created by starting the component"

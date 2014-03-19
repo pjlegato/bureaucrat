@@ -35,7 +35,11 @@
   function should extend it by adding the `:x-ingress-endpoint` key.
 
   Normalizers may optionally add any other metadata they like,
-  provided that the keys begin with :x-."
+  provided that the keys begin with :x-.
+
+  TODO: It would be nice to figure out how to auto-remove any non-EDN
+  serializable forms from outbound messages. Failing that, perhaps we
+  should use different prefixes for non-EDN serializable metadata."
   
   (normalize-ingress [component endpoint message])
   (normalize-egress [component message]))
