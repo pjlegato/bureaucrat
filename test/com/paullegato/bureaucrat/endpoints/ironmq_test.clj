@@ -1,6 +1,7 @@
-(ns test.com.paullegato.bureaucrat.endpoints.ironmq
+(ns com.paullegato.bureaucrat.endpoints.ironmq-test
   "Tests for the IronMQ implementation of IQueueEndpoint."
-  (:use midje.sweet)  
+  (:use [midje.sweet]
+        [com.paullegato.bureaucrat.test-helpers])
   (:require [com.stuartsierra.component   :as component]
             [com.paullegato.bureaucrat.endpoints.ironmq :as im]
             [com.paullegato.bureaucrat.endpoint :as queue]
@@ -16,7 +17,7 @@
   []
   (try
     (let [queue (im/start-ironmq-endpoint! test-queue-name)] 
-      (e/destroy-in-backend! queue))
+      (queue/destroy-in-backend! queue))
     (catch io.iron.ironmq.HTTPException e
       (if-not (= (.getMessage e) "Queue not found")
         ;; re-throw if it is anything other than the queue not existing
@@ -27,25 +28,19 @@
                           (after :facts (reset-test-queue!))])
 
 
-(defn- queue-exists?
-  "Returns truthy if a queue with the given name exists in IronMQ."
-  [name]
-  ;; :status is present only if nothing was found for that queue
-  (not (:status (im/ironmq-request :get (str "/queues/" name)))))
-
 
 (fact "endpoints can be created by starting the component"
       (let [endpoint (im/ironmq-endpoint test-queue-name)]
-        (queue-exists? test-queue-name) => falsey
+        (im/queue-exists? test-queue-name) => falsey
         (component/start endpoint)
-        (queue-exists? test-queue-name) => truthy))
+        (im/queue-exists? test-queue-name) => truthy))
 
 
 (fact "endpoints can send and receive messages"
       (let [endpoint (component/start (im/ironmq-endpoint test-queue-name))
             test-message (str "Send/receive test message -- " (rand 10000000))]
-        (queue/send! endpoint test-message 10000)
-        (queue/receive! endpoint 1000) => test-message))
+        (queue/send! endpoint {:payload test-message} 10000)
+        (queue/receive! endpoint 1000) => (contains {:payload test-message})))
 
 
 (fact "messages are counted properly"
@@ -60,7 +55,7 @@
         (queue/count-messages endpoint) => 4))
 
 
-(fact "messages are purged properly"
+(fact "messages are purged properly (may erroneously fail if IronMQ is heavily loaded when run)"
       (let [endpoint (component/start (im/ironmq-endpoint test-queue-name))
             test-message "foo"]
         (queue/send! endpoint test-message 100000)
@@ -70,6 +65,7 @@
         (queue/count-messages endpoint) => 4
 
         (queue/purge! endpoint)
+        (Thread/sleep 2000)
         (queue/count-messages endpoint) => 0))
 
 
@@ -81,21 +77,21 @@
         (try
           (queue/registered-listener endpoint) => nil
           (queue/register-listener! endpoint
-                                    (fn [msg] (reset! result msg))
+                                    (fn [msg]
+                                      (log/info "[test] Test message handler invoked with " msg)
+                                      (reset! result msg))
                                     1)
-          (queue/send! endpoint test-message 10000)
+          (queue/send! endpoint {:payload test-message} 10000)
           (queue/count-messages endpoint) => 1
           (queue/registered-listener endpoint) => truthy
 
           ;; Without this, the checker below may run before the message is
           ;; delivered on heavily loaded boxes
-          (while (> (queue/count-messages endpoint) 0)
-            (log/info+ "Awaiting message delivery in IronMQ test...")
-            (Thread/sleep 1000))
+          (spin-on #(= (queue/count-messages endpoint) 0) 5 2000)
 
           (queue/count-messages endpoint) => 0
 
-          @result => test-message
+          @result => (contains {:payload test-message})
           (finally (queue/unregister-listener! endpoint)))))
 
 
@@ -115,11 +111,9 @@
 
           ;; Without this, the checker below may run before the message is
           ;; delivered, on heavily loaded boxes
-          (while (> (queue/count-messages endpoint) 0)
-            (log/info+ "Awaiting message delivery...")
-            (Thread/sleep 200))
+          (spin-on #(= (queue/count-messages endpoint) 0) 5 2000)
 
-          @result => test-message
+          @result => (contains {:payload test-message})
           
           (queue/unregister-listener! endpoint)
           (queue/registered-listener endpoint) => nil
@@ -127,7 +121,7 @@
           (queue/send! endpoint second-test-message 10000)
 
           ;; Result should still be the first test-message
-          @result => test-message
+          @result => (contains {:payload test-message})
           (finally (queue/unregister-listener! endpoint)))))
 
 ;;
@@ -172,8 +166,14 @@
           (queue/purge! dlq)
           (queue/register-listener! endpoint
                                     (fn [msg]
+                                      (log/info "Got test message " msg)
                                       (throw (Exception. "Test exception from within the DLQ test; nothing to worry about..")))
                                     1)
           (queue/send! endpoint test-message 10000)
-          (queue/receive! dlq 10000) => test-message
+
+          ;; Wait for the message to be put onto the DLQ by IronMQ...
+          (spin-on #(< 0 (queue/count-messages dlq)) 10 2000)
+          (log/warn "count is " (queue/count-messages dlq))
+
+          (queue/receive! dlq 10000) => (contains {:payload test-message})
           (finally (queue/unregister-listener! endpoint)))))

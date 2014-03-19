@@ -1,8 +1,9 @@
-(ns test.com.paullegato.bureaucrat.endpoints.hornetq
+(ns com.paullegato.bureaucrat.endpoints.hornetq-test
   "Tests for the HornetQ implementation of IQueueEndpoint.
 
    These tests must be run within "
-  (:use midje.sweet)  
+  (:use [midje.sweet]
+        [com.paullegato.bureaucrat.test-helpers])  
   (:require [immutant.util]
             [com.stuartsierra.component   :as component]
             [com.paullegato.bureaucrat.endpoints.hornetq :as hq]
@@ -46,7 +47,8 @@
       (let [endpoint (component/start (hq/hornetq-endpoint test-queue-name))
             test-message (str "Send/receive test message -- " (rand 10000000))]
         (queue/send! endpoint test-message 10000)
-        (queue/receive! endpoint 1000) => test-message))
+        (queue/receive! endpoint 1000) => (contains {:payload test-message
+                                                     :x-ingress-endpoint endpoint})))
 
 (fact "messages are counted properly"
       (let [endpoint (component/start (hq/hornetq-endpoint test-queue-name))
@@ -86,11 +88,9 @@
 
         ;; Without this, the checker below may run before the message is
         ;; delivered on heavily loaded boxes
-        (while (> (queue/count-messages endpoint) 0)
-          (log/info+ "Awaiting message delivery in HornetQ test...")
-          (Thread/sleep 200))
+        (spin-on (fn [] (> (queue/count-messages endpoint) 0)))
 
-        @result => test-message))
+        @result => (contains {:payload test-message})))
 
 
 (fact "listener unregistration works"
@@ -112,7 +112,7 @@
           (log/info+ "Awaiting message delivery...")
           (Thread/sleep 200))
 
-        @result => test-message
+        @result => (contains {:payload test-message})
         
         (queue/unregister-listener! endpoint)
         (queue/registered-listener endpoint) => nil
@@ -120,17 +120,19 @@
         (queue/send! endpoint second-test-message 10000)
 
         ;; Result should still be the first test-message
-        @result => test-message))
+        @result => (contains {:payload test-message})))
 
 
 (fact "messages are placed back on the queue for redelivery if a handler throws an exception"
       (let [endpoint (component/start (hq/hornetq-endpoint test-queue-name))
             tries-left (atom 3)
+            handler-calls (atom 0)
             done (atom nil)
             test-message (str "Transaction test message -- " (rand 10000000))]
         (queue/register-listener! endpoint
                                      (fn [msg]
                                        (let [tries @tries-left]
+                                         (swap! handler-calls inc)
                                          ;;(log/info+ "* Exception-generating handler running. Tries left: " tries)
                                          (if (> tries 0)
                                            (do
@@ -145,11 +147,10 @@
         (Thread/sleep 100)
 
         ;; Wait for the backend to cycle through the retries...
-        (while (not @done)
-          (log/info+ "Awaiting test completion...")
-          (Thread/sleep 200))
+        (spin-on (fn [] (not @done)))
 
-        @tries-left => 0))
+        @tries-left => 0
+        @handler-calls => 4))
 
 
 (fact "messages wind up in the dead letter queue if delivery fails too many times"
@@ -162,4 +163,4 @@
                                        (throw (Exception. "Test exception from within the DLQ test; nothing to worry about..")))
                                      1)
         (queue/send! endpoint test-message 10000)
-        (queue/receive! dlq 10000) => test-message))
+        (queue/receive! dlq 10000) => (contains {:payload test-message})))

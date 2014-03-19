@@ -1,20 +1,74 @@
 (ns com.paullegato.bureaucrat.endpoint
   "The IEndpoint protocol defines a type with a set of operations for
   interacting with a generic MQ-like asynchronous communications
-  endpoint.
+  endpoint and providing normalized messages to the rest of the system.
 
   Concrete connectors are provided in the bureaucrat.endpoints
   package.
 
   TODO: Send messages in batches.
   TODO: Retrieve without auto-acknowledge
-  TODO: Support topics in addition to queues?")
+  TODO: Support topics in addition to queues?
+  TODO: Conflates the transport mechanism (e.g. HornetQ or IronMQ) 
+        with queue naming. It'd be better to have these seperate."
+  (:require [clj-time.core :as time]))
 
 ;;
 ;; This is structured after the tripartite format for protocols
 ;; suggested at
 ;; http://thinkrelevance.com/blog/2013/11/07/when-should-you-use-clojures-object-oriented-features
 ;;
+
+
+(defprotocol IMessageNormalizer
+  "IMessageNormalizer provides a function 'ingress' that ensures that
+  a given message is in a normalized structural format. Messages
+  returned from this function will be Clojure maps with at least an
+  `:x-ingress-endpoint key`. This key is a reference to the
+  IQueueEndpoint from which we received the message.
+
+  normalize-egress removes the :x-ingress-endpoint key in preparatio
+  for sending an outbound message, because its value is not
+  serializable.
+
+  If the incoming message is already a Clojure map, the normalizer
+  function should extend it by adding the `:x-ingress-endpoint` key.
+
+  Normalizers may optionally add any other metadata they like,
+  provided that the keys begin with :x-."
+  
+  (normalize-ingress [component endpoint message])
+  (normalize-egress [component message]))
+
+
+(deftype MessageNormalizer []
+  IMessageNormalizer
+  (normalize-ingress [component endpoint message]
+    (let [new-message (if (map? message)
+                        message
+                        {:payload message})]
+      (-> new-message
+       (assoc :x-ingress-endpoint endpoint)
+       (assoc :x-ingress-time (time/now)))))
+
+  (normalize-egress [component message]
+    (if (map? message)
+      (-> message
+          (dissoc :x-ingress-endpoint)
+          (dissoc :x-ingress-time))
+      message)))
+
+;; As an implementation detail, and since this is unlikely to ever
+;; change, we provide one standard global message normalizer for
+;; everyone to use. Implementations are free to ignore it and define
+;; their own if they like.
+(def ^:dynamic *message-normalizer* (MessageNormalizer.))
+
+(defn message-normalizer
+  "Returns a standard MessageNormalizer."
+  []
+  *message-normalizer*)
+
 
 (defprotocol IQueueEndpoint
 
@@ -64,8 +118,9 @@
     [component timeout]
     [component]
     "Blocks the current thread until a message is available on the
-    endpoint, for at most timeout milliseconds. Returns the message,
-    or nil if timed out.
+    endpoint, for at most timeout milliseconds. Returns the normalized
+    version of the raw message received from the endpoint, or nil if
+    timed out.
 
     The version without a timeout blocks indefinitely, until a message
     is received.
@@ -85,7 +140,9 @@
   (register-listener!  [component handler-fn concurrency]
     "Registers a listener that invokes handler-fn, a function of 1
      argument, in a background thread when a message becomes available
-     on the endpoint. Any existing listener will be replaced.
+     on the endpoint. Any existing listener will be replaced. Messages
+     will be normalized with an IMessageNormalizer before the handler
+     is called.
 
      Concurrency is the number of threads to use for the listener
      functions. If you require strict serial processing of

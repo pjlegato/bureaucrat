@@ -38,6 +38,8 @@
 
   Internal Documentation for Developers
   -------------------------------------
+   * Messages are EDN-encoded before being sent to IronMQ, and messages
+     are EDN-decoded upon receipt from IronMQ
    * :iron-cache is an atom of a map used to store state for the
      IronMQ Java client library.
    * :iron-cache also stores the threadpool that polls IronMQ in the
@@ -50,7 +52,8 @@
          them and shut them down. That needs a better solution.
 "
 
-  (:use com.paullegato.bureaucrat.endpoint)
+  (:use com.paullegato.bureaucrat.endpoint
+        [slingshot.slingshot :only [try+ throw+]])
   (:require [immutant.util]
 
             [com.stuartsierra.component :as component]
@@ -60,6 +63,7 @@
             [onelog.core        :as log]
             [org.httpkit.client :as http]
             [com.climate.claypoole :as cp]
+            [clojure.tools.reader.edn :as edn]
 
             [org.tobereplaced (mapply :refer [mapply])])
   (:import [io.iron.ironmq Client Queue Cloud EmptyQueueException]))
@@ -140,12 +144,12 @@
 
   Examples:
 
-       (im/ironmq-request (im/get-client foo)
+       (ironmq-request (get-client foo)
                           :post
                           \"/queues/foo/messages\"
                           {\"messages\" [{\"body\" \"First test message\"} {\"body\" \"Second test message\"}]})
 
-       (im/ironmq-request :get \"/queues/foo\")
+       (ironmq-request :get \"/queues/foo\")
 "
   ([method request] (ironmq-request  (Client. nil nil nil) method request))
   ([^Client client method ^String request & body]
@@ -170,11 +174,27 @@
                   (do
                     (Thread/sleep (* (Math/pow 4 try) 100))
                     (recur (+ try 1)))
-                  (do (let [trimmed-resp (select-keys resp [:body :status])]
-                        (log/warn (str "[ironmq] Error attempting to communicate with IronMQ. Request was "
-                                       method " " request
-                                       " Reply was " trimmed-resp))
-                        trimmed-resp))))))))))
+                  (let [trimmed-resp (select-keys resp [:body :status])]
+                    
+                    (log/warn (str "[ironmq][status=" (:status resp)  "] Error attempting to communicate with IronMQ. Request was "
+                                  method " " request
+                                  " Reply was " trimmed-resp))
+                    (throw+ {:message "Error attempting to communicate with IronMQ"
+                             :request-method method
+                             :request-path request
+                             :status (:status resp)
+                             :body (:body resp)
+                             }))))))))))
+
+(defn queue-exists?
+  "Returns a queue status map if a queue with the given name exists in
+  IronMQ, else false if the queue does not exist."
+  [name]
+  (try+
+   (ironmq-request :get (str "/queues/" name))
+   (catch [:status 404] _
+       false)))
+
 
 
 (defrecord IronMQEndpoint [^String name 
@@ -196,6 +216,7 @@
         (let [new-queue (.queue (get-client component) name)]
           (swap! iron-cache assoc :queue-object new-queue)
           new-queue)))
+
 
   (create-in-backend! [component options]
     ;; IronMQ has no "create" method as such, but you can create an
@@ -231,11 +252,15 @@
             ;; TODO: Work around the lack of a Queue#push method in
             ;; the client that lets you specify only the timeout.
             timeout 60
-            delay 0]
+            delay 0
+            message (pr-str (normalize-egress *message-normalizer* message))]
         (.push queue message timeout delay ttl-in-seconds))))
 
+
   (send! [component message]
-    (let [queue (lookup component)]
+    (let [queue (lookup component)
+          message (pr-str (normalize-egress *message-normalizer* message))]
+      (log/warn "message is " message)
       (.push queue message)))
 
 
@@ -245,7 +270,7 @@
           queue (lookup component)]
       (loop []
         (if-let [message (try-to-get-message queue)]
-          message
+          (normalize-ingress *message-normalizer* component (edn/read-string message))
           (when (>= wait-until (milli-time))
             (Thread/sleep poll-sleep-time) ;; don't hammer the server
             (recur))))))
@@ -256,7 +281,7 @@
     (let [queue (lookup component)]
       (loop []
         (if-let [message (try-to-get-message queue)]
-          message
+          (normalize-ingress *message-normalizer* component (edn/read-string message))
           (do
             (Thread/sleep poll-sleep-time) ;; don't hammer the server
             (recur))))))
@@ -267,7 +292,9 @@
           messages (.getMessages (.get queue size))]
       (doall (pmap (fn [message]
                      (.deleteMessage queue message)
-                     (.getBody message))
+                     (normalize-ingress *message-normalizer* 
+                                        component
+                                        (edn/read-string (.getBody message))))
                    messages))))
 
 
@@ -284,7 +311,7 @@
   ;;
   ;; Note that if your handler function throws an error while
   ;; processing a message, the message will NOT be placed back onto
-  ;; the queue.
+  ;; the queue. It'll be put onto the dead letter queue instead.
   ;;
   (register-listener!  [component handler-fn concurrency]
     (unregister-listener! component)
@@ -301,7 +328,7 @@
                    (doall (cp/pmap pool (fn [message]
                                           (log/info "[bureaucrat][ironmq] Background poller got a message, processing it. Message is " message)
                                           (try
-                                            (handler-fn message)
+                                            (handler-fn (normalize-ingress  *message-normalizer* component message))
                                             (catch Throwable t
                                               ;; TODO: Place message back on queue for retry -- but
                                               ;; we also need a mechanism to count redelivery attempts for a specific
@@ -309,9 +336,14 @@
                                               ;; For now, erroneous messages just go onto the DLQ directly.
                                               (log/error "[bureaucrat/ironmq] Async listener: error processing message " message " - "
                                                          (log/throwable t))
-                                              (send! (dead-letter-queue component) message))))
+                                              (send! (dead-letter-queue component) 
+                                                     (assoc message :x-processing-error (.getMessage t))
+                                                     ))))
                                    messages)))
+
+                 ;; TODO configurable poll interval
                  (Thread/sleep 5000)
+
                  (if (:should-halt @iron-cache)
                    (log/info "[bureaucrat][ironmq] Background poller got halt notice, stopping.")
                    (recur)))))

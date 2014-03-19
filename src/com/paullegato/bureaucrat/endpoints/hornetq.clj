@@ -31,7 +31,8 @@
 
   TODO: Implement receive-batch!
   TODO: Configurable DLQ per queue rather than a systemwide one?
-  TODO: State machine modelling backend state?"
+  TODO: State machine modelling backend state?
+  TODO: Cache / memoize (lookup) calls"
 
   (:use com.paullegato.bureaucrat.endpoint)
   (:require [immutant.util]
@@ -47,7 +48,9 @@
   (log/error+ "The code in com.paullegato.bureaucrat.endpoints.hornetq must be run within an Immutant container!"))
 
 (declare start-hornetq-endpoint!)
-(defrecord HornetQEndpoint [^String name handler-cache options]
+(defrecord HornetQEndpoint [^String name
+                            handler-cache
+                            options]
   IQueueEndpoint
 
   (lookup [component]
@@ -91,18 +94,32 @@
 
 
   (receive! [component timeout] 
-    (mq/receive (mq/as-queue name)
-                :timeout timeout))
+    (if-let [raw-message (mq/receive (mq/as-queue name)
+                                 :timeout timeout)]
+      (normalize-ingress *message-normalizer* component raw-message)))
+
 
   (receive! [component] 
-    (mq/receive (mq/as-queue name)))
+    (if-let [raw-message     (mq/receive (mq/as-queue name))]
+      (normalize-ingress *message-normalizer* component raw-message)))
 
 
   (register-listener!  [component handler-fn concurrency]
     (unregister-listener! component)
     (reset! handler-cache
             @(mq/listen (mq/as-queue name)
-                       handler-fn
+                        (fn [raw-message]
+                          (let [message (normalize-ingress *message-normalizer* component raw-message)]
+                            (try
+                              (handler-fn message)
+                              (catch Throwable t
+                                (log/error "[bureaucrat][hornetq-endpoint] Error invoking handler function for message: " 
+                                           raw-message "!"
+                                           (log/throwable t))
+                                (send! (dead-letter-queue component) (assoc message :x-handler-error t))
+                                ;; HornetQ will attempt to redeliver if we throw an exception..
+                                (throw t)))))
+
                        :concurrency concurrency)))
 
 
@@ -121,6 +138,7 @@
             (.countMessages "")))
 
   (dead-letter-queue [component]
+    ;; TODO memoize this
     (start-hornetq-endpoint! dlq-name))
 
 
