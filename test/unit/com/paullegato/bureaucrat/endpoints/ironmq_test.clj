@@ -67,7 +67,7 @@
         (queue/purge! endpoint)
 
         ;; Await processing by IronMQ
-        (spin-on #(= 0 (queue/count-messages endpoint)))
+        (spin-on #(= 0 (queue/count-messages endpoint)) 10 1000)
 
         (queue/count-messages endpoint) => 0))
 
