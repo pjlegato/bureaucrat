@@ -9,6 +9,9 @@ implementations for various backend MQs, and a tiny router that
 dispatches incoming API messages to designated Clojure functions,
 optionally sending replies back to the caller.
 
+Bureaucrat is alpha-stage software; API changes are still
+possible. Pull requests are welcome!
+
 ### Why the name "bureaucrat"?
 The library merely shuttles messages around between endpoints, which
 actually perform the useful work.
