@@ -211,7 +211,7 @@
                            ]
   IQueueEndpoint
 
-  (lookup [component]
+  (get-backend [component]
     (or (get @iron-cache :queue-object)
         (let [new-queue (.queue (get-client component) name)]
           (swap! iron-cache assoc :queue-object new-queue)
@@ -232,11 +232,11 @@
                     :post
                     (str "/queues/" name)
                     (or options {}))
-    (lookup component))
+    (get-backend component))
 
 
   (destroy-in-backend! [component]
-    (.destroy (lookup component)))
+    (.destroy (get-backend component)))
 
 
   (send! [component message ttl]
@@ -248,7 +248,7 @@
             (< ttl 1))
       (send! component message)
       (let [ttl-in-seconds (math/ceil (/ ttl 1000))
-            queue (lookup component)
+            queue (get-backend component)
             ;; TODO: Work around the lack of a Queue#push method in
             ;; the client that lets you specify only the timeout.
             timeout 60
@@ -258,7 +258,7 @@
 
 
   (send! [component message]
-    (let [queue (lookup component)
+    (let [queue (get-backend component)
           message (pr-str (normalize-egress *message-normalizer* message))]
       (log/warn "message is " message)
       (.push queue message)))
@@ -267,7 +267,7 @@
   (receive! [component timeout]
     ;; blocks for timeout ms
     (let [wait-until (+ timeout (milli-time))
-          queue (lookup component)]
+          queue (get-backend component)]
       (loop []
         (if-let [message (try-to-get-message queue)]
           (normalize-ingress *message-normalizer* component (edn/read-string message))
@@ -278,7 +278,7 @@
 
   (receive! [component] 
     ;; Blocks until a message is available
-    (let [queue (lookup component)]
+    (let [queue (get-backend component)]
       (loop []
         (if-let [message (try-to-get-message queue)]
           (normalize-ingress *message-normalizer* component (edn/read-string message))
@@ -288,7 +288,7 @@
 
 
   (receive-batch! [component size]
-    (let [queue           (lookup component)
+    (let [queue           (get-backend component)
           messages (.getMessages (.get queue size))]
       (doall (pmap (fn [message]
                      (.deleteMessage queue message)
@@ -360,7 +360,7 @@
       (swap! iron-cache dissoc :pool)))
 
   (purge! [component]
-    (.clear (lookup component)))
+    (.clear (get-backend component)))
 
   (dead-letter-queue [component]
     (start-ironmq-endpoint! dlq-name))

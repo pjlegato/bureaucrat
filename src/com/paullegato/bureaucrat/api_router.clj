@@ -65,6 +65,8 @@
     produced the message for us. This is currently used so that
     Bureaucrat can send erroneous messages to its dead letter queue. 
     The endpoint implementations are responsible for adding this.
+  * :x-error-processing: Holds details about errors encountered while 
+    attempting to process this message.
 "
 
   (process-message! [component message]

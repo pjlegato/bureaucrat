@@ -86,9 +86,13 @@
    millisecond resolution on ttls and timeouts. In such cases, they
    will round the time you give up to the nearest second. "
 
-  (lookup   [component]
+  (get-backend   [component]
     "Returns an implementation-specific endpoint interface object if
     the endpoint has been created in the backend; else nil.")
+
+  (lookup [component queue-name]
+    "Returns another IQueueEndpoint on the same underlying transport as the component, but with the given
+     queue-name. The queue will not be created if it doesn't already exist. ")
 
   (create-in-backend!  [component options]
     "Creates the endpoint in the underlying implementation backend
@@ -108,14 +112,24 @@
      queue.")
 
   (send! 
-    [component message ttl] 
+    [component message metadata] 
     [component message]
-    "Places the given message onto the endpoint. The message will be
-    destroyed automatically if it is not delivered in ttl milliseconds.
+    "Places the given message onto the endpoint. The message is arbitrary EDN-serializable data.
 
-    The version without a ttl stores the message in the queue
-    indefinitely, or as long as the underlying implementation allows.
-    Specifying a ttl of 0 is equivalent to not using a ttl.")
+     If you wish to work with the higher level facilities provided by Bureaucrat on 
+     top of IQueueEndpoint, `message` should be a map with a `:payload` key. You can
+     put arbitrary EDN-serializable data into `:payload`.
+
+     Metadata is a map. Implementations are required to support the following keys.
+
+     * :ttl - The message will be destroyed automatically if it is not
+       delivered before this many milliseconds have elapsed. If not
+       given, the message is stored in the queue indefinitely, or as
+       long as the implementation allows. Specifying a TTL of 0 is
+       equivalent to not supplying a ttl.
+
+     * :correlation-id - An arbitrary string that may be used by the
+       consumer to figure out what previous message this message relates to.")
 
 
   (receive!
@@ -171,9 +185,9 @@
     "Returns the component that is the dead letter queue associated
     with the given component's queue.
 
-    Note that IronMQ does not support dead letter queues as of the
-    time this was written, so don't rely on them if you're using
-    IronMQ!"))
+    Note that IronMQ does not intrinsically support dead letter queues
+    as of the time this was written, so don't rely on them if you're
+    using IronMQ! They can be simulated on our end, though."))
 
 
 

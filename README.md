@@ -1,29 +1,82 @@
 # bureaucrat
 ## An MQ-based API Router for Clojure
 
-Bureaucrat is a Clojure utility library for constructing message queue
-based APIs. It provides an abstraction over MQ-based communications,
-implementations for various backend MQs, and a small router that
-dispatches incoming API messages to designated Clojure functions.
+Bureaucrat is a Clojure utility library to ease the construction of
+asynchronous message queue based APIs. 
+
+It provides an abstraction over MQ-based communications,
+implementations for various backend MQs, and a tiny router that
+dispatches incoming API messages to designated Clojure functions,
+optionally sending replies back to the caller.
 
 ### Why the name "bureaucrat"?
 The library merely shuttles messages around between endpoints, which
 actually perform the useful work.
 
+### What underlying transport mechanisms are supported?
+Bureaucrat supports HornetQ (within an Immutant container) and
+IronMQ. Core.async and Amazon SQS are planned. Pull requests are
+welcome! :)
+
 ## Overview
-The main abstraction is `bureaucrat.endpoint/IQueueEndpoint`. It
-defines a minimal set of abstractions that all queue backends must
-implement.
 
-An implementation is provided in `bureaucrat.endpoints.hornetq` that
-uses the [Immutant application container's](http://immutant.org/)
-built-in message queue, [HornetQ](http://www.jboss.org/hornetq). (It
-currently does not support standalone HornetQ, only the embedded
-version supplied by Immutant.)
+Your application defines an ingress endpoint name (e.g. "foo-api"), a
+transport mechanism (such as HornetQ or IronMQ), and an API. The API
+is just a series of specially designated regular Clojure functions.
 
-Next on the implementation list is [IronMQ](http://dev.iron.io/mq/).
+Messages arrive on the endpoint from somewhere -- exactly where is
+deliberately undefined, to promote loose coupling between
+components. Bureaucrat dispatches the message payload to the
+appropriate handler function as its argument. Your app performs
+app-specific work in the handler function. If the incoming message
+specified a `:reply-to` address and the handler function returns a
+value, Bureaucrat will send that value to the queue named in
+`:reply-to`.
 
-## HornetQ Backend
+Payloads can be any arbitrary EDN-serializable data.
+
+If you later want to run the same API on a different transport, it's
+as easy as swapping in a new IQueueEndpoint component. You can even
+run the same API handlers simultaneously on multiple transports!
+
+### `IQueueEndpoint` Protocol
+The lowest level abstraction is `bureaucrat.endpoint/IQueueEndpoint`. It
+defines a minimal set of messaging functionality that all queue backends must
+implement, such as sending and receiving messages. At this level,
+messages are treated as arbitrary blobs of EDN-serializable data and
+no special structure is imposed on the messages.
+
+Implementations are provided in `bureaucrat.endpoints.*` that
+use the [Immutant application container's](http://immutant.org/)
+built-in message queue, [HornetQ](http://www.jboss.org/hornetq) and
+[IronMQ](http://dev.iron.io/mq/).
+
+## `IAPIRouter` Protocol
+
+The IAPIRouter protocol provides a generic mechanism for mapping
+specially formatted messages to Clojure function calls and vice
+versa.
+
+To use IAPIRouter, your messages must be specially formatted rather
+than generic EDN blobs. All routable messages must be maps. The only
+required key is `:call`. Its value specifies the API call that the
+message wishes to invoke.
+
+The exact way this call name is mapped to a handler function is implementation
+specific. Implementations are provided that allow you to supply a map
+of keywords to functions to be used as a routing table, and to
+annotate Clojure functions with the `:api` metadata to allow them to
+be called by incoming messages automatically if the incoming message
+knows the function's name.
+
+If the calling message includes the optional key `:reply-to` and the
+handler function returns a value, the API router will look up a queue
+with the given name on the same transport where the message was
+received (possibly the same queue), encode the returned value as the
+`:payload` of a map, and send it to that queue.
+
+
+## Example Endpoint: HornetQ Backend
 
 To send and receive messages with HornetQ:
 
@@ -71,7 +124,7 @@ Handler got a message: Hello, world!
 ````
 
 ### XA Transactions
-Your handler function demarcates an
+When using HornetQ, your handler function demarcates an
 [XA distributed transaction](http://immutant.org/documentation/current/messaging.html#sec-3-2-1). In
 short, all XA operations in the transaction either fail or succeed
 atomically. If your handler (or any other XA participant) throws an
@@ -118,7 +171,10 @@ You can retrieve the DLQ associated with a particular queue with
 `bureaucrat.endpoint/dead-letter-queue`. It returns an ordinary queue
 component which you can read like any other.
 
-### Utility functions
+Note that some backends such as IronMQ do not have a built-in DLQ, so
+we simulate one in our wrapper.
+
+## Utility functions
 
 You can count the messages currently in a queue, and unconditionally
 purge all messages in the queue.
@@ -132,11 +188,17 @@ user> (endpoint/count-messages queue)
 0
 ````
 
-## IronMQ Backend
-TODO.
+## Security
+Security is handled at the transport layer, and not by Bureaucrat. Any
+message that gets into an incoming message queue will be processed by
+Bureaucrat, no questions asked. It is up to you to ensure that bad
+actors cannot access your queues.
 
-## API Router
-TODO.
+## Roadmap
+* Use core.async as an in-process message transport
+* Amazon SQS
+* Provide additional canned enterprise messaging widgets for routing
+  and transformation beyond the API router.
 
 ## Component / Lifecycle Architecture
 

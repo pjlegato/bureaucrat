@@ -32,7 +32,7 @@
 
   (handler-for-call [component call]
     (let [call (str prefix call)
-          fn (resolve (symbol call))
+          fn   (resolve (symbol call))
           api-allowed? (:api (meta fn))]
       (if api-allowed?
         fn

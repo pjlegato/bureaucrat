@@ -39,7 +39,7 @@
 (fact "endpoints can send and receive messages"
       (let [endpoint (component/start (im/ironmq-endpoint test-queue-name))
             test-message (str "Send/receive test message -- " (rand 10000000))]
-        (queue/send! endpoint {:payload test-message} 10000)
+        (queue/send! endpoint {:payload test-message} {:ttl 10000})
         (queue/receive! endpoint 1000) => (contains {:payload test-message})))
 
 
@@ -47,21 +47,21 @@
       (let [endpoint (component/start (im/ironmq-endpoint test-queue-name))
             test-message "foo"]
         (queue/count-messages endpoint) => 0
-        (queue/send! endpoint test-message 100000)
+        (queue/send! endpoint test-message {:ttl 100000})
         (queue/count-messages endpoint) => 1
-        (queue/send! endpoint test-message 100000)
-        (queue/send! endpoint test-message 100000)
-        (queue/send! endpoint test-message 100000)
+        (queue/send! endpoint test-message {:ttl 100000})
+        (queue/send! endpoint test-message {:ttl 100000})
+        (queue/send! endpoint test-message {:ttl 100000})
         (queue/count-messages endpoint) => 4))
 
 
 (fact "messages are purged properly (may erroneously fail if IronMQ is heavily loaded when run)"
       (let [endpoint (component/start (im/ironmq-endpoint test-queue-name))
             test-message "foo"]
-        (queue/send! endpoint test-message 100000)
-        (queue/send! endpoint test-message 100000)
-        (queue/send! endpoint test-message 100000)
-        (queue/send! endpoint test-message 100000)
+        (queue/send! endpoint test-message {:ttl 100000})
+        (queue/send! endpoint test-message {:ttl 100000})
+        (queue/send! endpoint test-message {:ttl 100000})
+        (queue/send! endpoint test-message {:ttl 100000})
         (queue/count-messages endpoint) => 4
 
         (queue/purge! endpoint)
@@ -84,7 +84,7 @@
                                       (log/info "[test] Test message handler invoked with " msg)
                                       (reset! result msg))
                                     1)
-          (queue/send! endpoint {:payload test-message} 10000)
+          (queue/send! endpoint {:payload test-message} {:ttl 10000})
           (queue/count-messages endpoint) => 1
           (queue/registered-listener endpoint) => truthy
 
@@ -110,7 +110,7 @@
                                     1)
           (queue/registered-listener endpoint) => truthy
 
-          (queue/send! endpoint test-message 10000)
+          (queue/send! endpoint test-message {:ttl 10000})
 
           ;; Without this, the checker below may run before the message is
           ;; delivered, on heavily loaded boxes
@@ -121,7 +121,7 @@
           (queue/unregister-listener! endpoint)
           (queue/registered-listener endpoint) => nil
           
-          (queue/send! endpoint second-test-message 10000)
+          (queue/send! endpoint second-test-message {:ttl 10000})
 
           ;; Result should still be the first test-message
           @result => (contains {:payload test-message})
@@ -148,7 +148,7 @@
 ;;                                             ;;(log/info+ "No tries left, accepting the message.")
 ;;                                             (reset! done true)))))
 ;;                                     1)
-;;           (queue/send! endpoint test-message 10000)
+;;           (queue/send! endpoint test-message {:ttl 10000})
 
 ;;           (Thread/sleep 100)
 
@@ -172,7 +172,7 @@
                                       (log/info "Got test message " msg)
                                       (throw (Exception. "Test exception from within the DLQ test; nothing to worry about..")))
                                     1)
-          (queue/send! endpoint test-message 10000)
+          (queue/send! endpoint test-message {:ttl 10000})
 
           ;; Wait for the message to be put onto the DLQ by IronMQ...
           (spin-on #(< 0 (queue/count-messages dlq)) 10 2000)

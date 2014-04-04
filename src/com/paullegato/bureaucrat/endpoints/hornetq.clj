@@ -7,10 +7,13 @@
 
   The name field specifies the queue's string name.
 
-  Options may be nil, or it may be a map of
+  Create-time options may be nil, or it may be a map of
   [http://immutant.org/documentation/current/apidoc/immutant.messaging.html#var-start](Immutant
   HornetQ options). The options you provide will be passed through directly to
   `immutant.messaging/start`.
+
+  The metadata map given to `send!` supports any of the options available to `immutant.messaging/publish`, 
+  in addition to those required by IQueueEndpoint. 
 
 
   Internal Documentation for Library Developers
@@ -32,7 +35,7 @@
   TODO: Implement receive-batch!
   TODO: Configurable DLQ per queue rather than a systemwide one?
   TODO: State machine modelling backend state?
-  TODO: Cache / memoize (lookup) calls"
+  TODO: Cache / memoize (get-backend) calls"
 
   (:use com.paullegato.bureaucrat.endpoint)
   (:require [immutant.util]
@@ -48,13 +51,18 @@
   (log/error+ "The code in com.paullegato.bureaucrat.endpoints.hornetq must be run within an Immutant container!"))
 
 (declare start-hornetq-endpoint!)
+
 (defrecord HornetQEndpoint [^String name
                             handler-cache
                             options]
   IQueueEndpoint
 
-  (lookup [component]
+  (get-backend [component]
     (hornetq/destination-controller (mq/as-queue name)))
+
+
+  (lookup [component queue-name]
+    (start-hornetq-endpoint! queue-name))
 
 
   (create-in-backend! [component options]
@@ -70,23 +78,24 @@
         (get component :dlq)
         (assoc component :dlq (start-hornetq-endpoint! dlq-name)))
 
-    (or (lookup component)
+    (or (get-backend component)
         (if options
           (mapply mq/start (mq/as-queue name) options)
           (mq/start (mq/as-queue name)))
-        (lookup component)))
+        (get-backend component)))
 
 
   (destroy-in-backend! [component]
     ;; Idempotent
-    (if (lookup component)
+    (if (get-backend component)
       (mq/stop (mq/as-queue name) :force true)))
 
 
-  (send! [component message ttl]
-    (mq/publish (mq/as-queue name)
-                (normalize-egress *message-normalizer* message)
-                :ttl ttl))
+  (send! [component message metadata]
+    (mapply mq/publish
+            (mq/as-queue name)
+            (normalize-egress *message-normalizer* message)
+            metadata))
 
   (send! [component message]
      (mq/publish (mq/as-queue name)
@@ -95,7 +104,7 @@
 
   (receive! [component timeout] 
     (if-let [raw-message (mq/receive (mq/as-queue name)
-                                 :timeout timeout)]
+                                     :timeout timeout)]
       (normalize-ingress *message-normalizer* component raw-message)))
 
 
@@ -134,7 +143,7 @@
 
 
   (count-messages [component]
-    (some-> (lookup component)
+    (some-> (get-backend component)
             (.countMessages "")))
 
   (dead-letter-queue [component]
@@ -143,7 +152,7 @@
 
 
   (purge! [component]
-    (some-> (lookup component)
+    (some-> (get-backend component)
             (.removeMessages "")))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -27,7 +27,14 @@
   [message]
   (reset! last-result message))
 
-(def routes {:foo allowed-test-handler})
+;; Returns the incoming message with the string "Pong - " prepended
+(defn replying-handler
+  [message]
+  (str "Pong - " message))
+
+
+(def routes {:foo allowed-test-handler
+             :replying-handler replying-handler})
 
 
 (fact "API handlers are called properly from HornetQ source queues"
@@ -70,3 +77,34 @@
         
         ;; Make sure invalid API call went to the DLQ:
         (queue/receive! dlq 10000) => (contains {:payload second-test-message})))
+
+
+(fact "the router sends handler function return values to the :reply-to address"
+      (let [router         (table-api-router routes)
+            endpoint       (hq/start-hornetq-endpoint! test-queue-name)
+            reply-endpoint-name (str test-queue-name "-replies")
+            reply-endpoint (hq/start-hornetq-endpoint! reply-endpoint-name)
+            dlq            (queue/dead-letter-queue endpoint)
+            test-message   (str "HQ/router integration test reply-generating message -- " (rand 10000000))
+            test-reply     (replying-handler test-message)
+            correlation-id "foo-bar-baz"]
+
+        (queue/purge! dlq)
+        (queue/purge! endpoint)
+        (queue/purge! reply-endpoint)
+
+        (queue/register-listener! endpoint
+                                  (fn [message]
+                                    (router/process-message! router message))
+                                  1)
+
+        (queue/send! endpoint {:call :replying-handler
+                               :reply-to reply-endpoint-name
+                               :correlation-id correlation-id
+                               :payload test-message})
+        ;; Await message delivery
+        (spin-on #(= 0 (queue/count-messages endpoint)))
+
+        ;; Await reply delivery and ensure that the reply endpoint got the correct reply
+        (queue/receive! reply-endpoint 10) => (contains {:payload test-reply}) 
+        ))
