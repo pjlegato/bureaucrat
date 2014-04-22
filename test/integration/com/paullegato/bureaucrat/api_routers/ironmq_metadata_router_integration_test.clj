@@ -1,6 +1,6 @@
 (ns integration.com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test
   "Exercises the metadata API router in conjunction with a IronMQ endpoint"
-  (:require [com.paullegato.bureaucrat.endpoints.ironmq :as hq]
+  (:require [com.paullegato.bureaucrat.endpoints.ironmq :as iq]
             [com.paullegato.bureaucrat.api-router :as router]
             [com.paullegato.bureaucrat.endpoint :as queue]
             [onelog.core :as log])
@@ -25,10 +25,10 @@
 
 (fact "API handlers are called properly from Ironmq source queues"
       (let [router   (metadata-api-router "integration.com.paullegato.bureaucrat.api-routers.ironmq-metadata-router-integration-test/")
-            endpoint (hq/start-ironmq-endpoint! test-queue-name)
+            endpoint (iq/start-ironmq-endpoint! test-queue-name)
             dlq      (queue/dead-letter-queue endpoint)
-            test-message (str "HQ/router integration test message -- " (rand 10000000))
-            second-test-message (str "HQ/router integration second test message -- " (rand 10000000))]
+            test-message (str "IQ/router integration test message -- " (rand 10000000))
+            second-test-message (str "IQ/router integration second test message -- " (rand 10000000))]
 
         (queue/purge! dlq)
 

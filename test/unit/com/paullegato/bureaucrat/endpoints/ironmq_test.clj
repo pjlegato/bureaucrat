@@ -2,30 +2,15 @@
   "Tests for the IronMQ implementation of IQueueEndpoint."
   (:use [midje.sweet]
         [helpers.bureaucrat.test-helpers])
-  (:require [com.stuartsierra.component   :as component]
+  (:require [com.stuartsierra.component  :as component]
+            [onelog.core :as log]
             [com.paullegato.bureaucrat.endpoints.ironmq :as im]
-            [com.paullegato.bureaucrat.endpoint :as queue]
-            [onelog.core         :as log]))
+            [com.paullegato.bureaucrat.endpoint         :as queue]))
 
 
-(def test-queue-name "test.queue")
 
-(defn- reset-test-queue!
-  "Ensure that the test queue is empty of any persistent messages and
-   does not exist in the backend, in case it leaks out of a failed
-   test run."
-  []
-  (try
-    (let [queue (im/start-ironmq-endpoint! test-queue-name)] 
-      (queue/destroy-in-backend! queue))
-    (catch io.iron.ironmq.HTTPException e
-      (if-not (= (.getMessage e) "Queue not found")
-        ;; re-throw if it is anything other than the queue not existing
-        (throw e)))))
-
-
-(namespace-state-changes [(before :facts (reset-test-queue!))
-                          (after :facts (reset-test-queue!))])
+(namespace-state-changes [(before :facts (reset-ironmq-test-queue!))
+                          (after :facts (reset-ironmq-test-queue!))])
 
 
 

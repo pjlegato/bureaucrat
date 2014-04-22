@@ -54,9 +54,7 @@
 
   (:use com.paullegato.bureaucrat.endpoint
         [slingshot.slingshot :only [try+ throw+]])
-  (:require [immutant.util]
-
-            [com.stuartsierra.component :as component]
+  (:require [com.stuartsierra.component :as component]
             [clojure.math.numeric-tower :as math]
 
             [cheshire.core      :as json]
@@ -243,25 +241,25 @@
     ;; The protocl specifies that ttls are in milliseconds, but
     ;; IronMQ requires timeouts in seconds, not milliseconds.
     ;; ttls will be rounded up to the next second.
-
-    (if (or (nil? ttl)
-            (< ttl 1))
-      (send! component message)
-      (let [ttl-in-seconds (math/ceil (/ ttl 1000))
-            queue (get-backend component)
-            ;; TODO: Work around the lack of a Queue#push method in
-            ;; the client that lets you specify only the timeout.
-            timeout 60
-            delay 0
-            message (pr-str (normalize-egress *message-normalizer* message))]
-        (.push queue message timeout delay ttl-in-seconds))))
+    (if-not message
+      (log/error "send! got a nil message; ignoring it.")      
+      (if (or (nil? ttl)
+              (< ttl 1))
+        (send! component message)
+        (let [ttl-in-seconds (math/ceil (/ ttl 1000))
+              queue (get-backend component)
+              ;; TODO: Work around the lack of a Queue#push method in
+              ;; the client that lets you specify only the timeout.
+              timeout 60
+              delay 0]
+          (.push queue message timeout delay ttl-in-seconds)))))
 
 
   (send! [component message]
-    (let [queue (get-backend component)
-          message (pr-str (normalize-egress *message-normalizer* message))]
-      (log/warn "message is " message)
-      (.push queue message)))
+    (if-not message
+      (log/error "send! got a nil message; ignoring it.")
+      (let [queue (get-backend component)]
+        (.push queue message))))
 
 
   (receive! [component timeout]
@@ -270,7 +268,7 @@
           queue (get-backend component)]
       (loop []
         (if-let [message (try-to-get-message queue)]
-          (normalize-ingress *message-normalizer* component (edn/read-string message))
+          (str message)
           (when (>= wait-until (milli-time))
             (Thread/sleep poll-sleep-time) ;; don't hammer the server
             (recur))))))
@@ -281,7 +279,7 @@
     (let [queue (get-backend component)]
       (loop []
         (if-let [message (try-to-get-message queue)]
-          (normalize-ingress *message-normalizer* component (edn/read-string message))
+          (str message)
           (do
             (Thread/sleep poll-sleep-time) ;; don't hammer the server
             (recur))))))
@@ -292,9 +290,7 @@
           messages (.getMessages (.get queue size))]
       (doall (pmap (fn [message]
                      (.deleteMessage queue message)
-                     (normalize-ingress *message-normalizer* 
-                                        component
-                                        (edn/read-string (.getBody message))))
+                     (str message))
                    messages))))
 
 
@@ -323,12 +319,16 @@
                      (:pool (swap! iron-cache assoc :pool pool))))]
 
       (cp/future pool 
-                 (let [messages (receive-batch! component (or poller-batch-size 20))]
-                   (log/info "[bureaucrat][ironmq] Background message poller got " (count messages) " messages.")
+                 (let [messages (receive-batch! component (or poller-batch-size 20))
+                       message-count (count messages)]
+
+                   (if (> message-count 0)
+                     (log/info "[bureaucrat][ironmq] Background message poller got " message-count " messages."))
+                   
                    (doall (cp/pmap pool (fn [message]
-                                          (log/info "[bureaucrat][ironmq] Background poller got a message, processing it. Message is " message)
+                                          (log/debug "[bureaucrat][ironmq] Background poller got a message, processing it. Message is " message)
                                           (try
-                                            (handler-fn (normalize-ingress  *message-normalizer* component message))
+                                            (handler-fn message)
                                             (catch Throwable t
                                               ;; TODO: Place message back on queue for retry -- but
                                               ;; we also need a mechanism to count redelivery attempts for a specific
@@ -337,8 +337,7 @@
                                               (log/error "[bureaucrat/ironmq] Async listener: error processing message " message " - "
                                                          (log/throwable t))
                                               (send! (dead-letter-queue component) 
-                                                     (assoc message :x-processing-error (.getMessage t))
-                                                     ))))
+                                                     (assoc message :x-processing-error (.getMessage t))))))
                                    messages)))
 
                  ;; TODO configurable poll interval

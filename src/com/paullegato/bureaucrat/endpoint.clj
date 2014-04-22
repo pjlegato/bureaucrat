@@ -116,6 +116,10 @@
     [component message]
     "Places the given message onto the endpoint. The message is arbitrary EDN-serializable data.
 
+     This protocol defines nil messages as invalid, since nils often result from an error
+     in message generation code and cannot be distinguished from legitimate nil messages..
+     Backends should ignore nil messages.
+
      If you wish to work with the higher level facilities provided by Bureaucrat on 
      top of IQueueEndpoint, `message` should be a map with a `:payload` key. You can
      put arbitrary EDN-serializable data into `:payload`.

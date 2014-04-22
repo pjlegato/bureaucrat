@@ -92,14 +92,18 @@
 
 
   (send! [component message metadata]
-    (mapply mq/publish
-            (mq/as-queue name)
-            (normalize-egress *message-normalizer* message)
-            metadata))
+    (if-not message
+      (log/error "send! got a nil message; ignoring it.")
+      (mapply mq/publish
+              (mq/as-queue name)
+              (normalize-egress *message-normalizer* message)
+              metadata)))
 
   (send! [component message]
-     (mq/publish (mq/as-queue name)
-                 (normalize-egress *message-normalizer* message)))
+    (if-not message
+      (log/error "send! got a nil message; ignoring it.")
+      (mq/publish (mq/as-queue name)
+                  (normalize-egress *message-normalizer* message))))
 
 
   (receive! [component timeout] 

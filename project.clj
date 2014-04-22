@@ -1,10 +1,13 @@
-(defproject bureaucrat "0.1.0-SNAPSHOT"
+(defproject bureaucrat "0.2.0-SNAPSHOT"
   :description "MQ-based API router"
   :url "https://github.com/pjlegato/bureaucrat/"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.6.0-RC1"]
-                 ;;[org.immutant/immutant-core "1.1.0"]
+  :dependencies [[org.clojure/clojure "1.6.0"]
+                 
+                 [org.immutant/immutant-messaging "1.1.1"] ;; HornetMQ interface
+
+                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
 
                  [com.stuartsierra/component "0.2.1"]  ;; Software components framework
                  [org.clojure/tools.reader "0.8.3"]
@@ -21,7 +24,8 @@
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [com.climate/claypoole "0.2.1"]  ;; Thread pool management
                  ]
-  :profiles {:dev {:dependencies [[midje "1.6.3" :exclusions [dynapath]]
+  :profiles {:dev {:dependencies [[alembic "0.2.1"]
+                                  [midje "1.6.3" :exclusions [dynapath]]
                                   ]}}
 
   :immutant {:nrepl-port 7654
