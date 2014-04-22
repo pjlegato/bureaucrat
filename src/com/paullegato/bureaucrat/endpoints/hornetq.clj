@@ -96,25 +96,25 @@
       (log/error "send! got a nil message; ignoring it.")
       (mapply mq/publish
               (mq/as-queue name)
-              (normalize-egress *message-normalizer* message)
+              message
               metadata)))
 
   (send! [component message]
     (if-not message
       (log/error "send! got a nil message; ignoring it.")
       (mq/publish (mq/as-queue name)
-                  (normalize-egress *message-normalizer* message))))
+                  message)))
 
 
   (receive! [component timeout] 
     (if-let [raw-message (mq/receive (mq/as-queue name)
                                      :timeout timeout)]
-      (normalize-ingress *message-normalizer* component raw-message)))
+      (str raw-message)))
 
 
   (receive! [component] 
     (if-let [raw-message     (mq/receive (mq/as-queue name))]
-      (normalize-ingress *message-normalizer* component raw-message)))
+      (str raw-message)))
 
 
   (register-listener!  [component handler-fn concurrency]
@@ -122,7 +122,7 @@
     (reset! handler-cache
             @(mq/listen (mq/as-queue name)
                         (fn [raw-message]
-                          (let [message (normalize-ingress *message-normalizer* component raw-message)]
+                          (let [message (str raw-message)]
                             (try
                               (handler-fn message)
                               (catch Throwable t
