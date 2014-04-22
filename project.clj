@@ -10,7 +10,7 @@
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
 
                  [com.stuartsierra/component "0.2.1"]  ;; Software components framework
-                 [org.clojure/tools.reader "0.8.3"]
+                 [org.clojure/tools.reader "0.8.4"]
                  [org.clojars.pjlegato/clansi "1.3.0"] ;; ANSI colorization
                  [onelog "0.4.3"]  ;; Logging library
                  [environ "0.4.0"] ;; Read config values from env vars
