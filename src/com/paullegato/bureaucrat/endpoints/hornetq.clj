@@ -2,6 +2,12 @@
   "Implementation of the IEndpoint protocol for Immutant's HornetQ
   message queue.
 
+
+  * NOTE 4/2014: HornetQ is being put on hold until Immutant 2.0 comes out. 
+  Immutant 2 will give us an easy way to deal with just HornetQ, rather than 
+  the whole JBoss stack. Until then, don't expect this to work. Pull requests welcome!
+
+
   User Documentation
   ==================
 
