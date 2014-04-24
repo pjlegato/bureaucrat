@@ -52,31 +52,6 @@
   (dead-letter-queue [component]
     (create-in-backend! component dlq-name nil)))
 
-;; (defn get-client
-;;   "Given a map structured as an IronMQTransport, returns the Java
-;;   io.iron.ironmq.Client instance stored in it. If there is none,
-;;   creates one and stores it in the map's :iron-cache atom under 
-;;   the :client key.
-
-;;   project-id, token, and cloud are used to initialize the Java Client
-;;   object. It is recommended that they be nil in most cases, in which
-;;   case the Client will attempt to use environment variables and the
-;;   Iron.io config file to find values for them, as described at
-;;   http://dev.iron.io/worker/reference/configuration/ .
-
-;;   If there is no atom in :iron-cache, the record is uninitialized, so
-;;   this function returns nil."
-;;   ([iron-mq-endpoint] (get-client iron-mq-endpoint nil nil nil))
-;;   ([iron-mq-endpoint ^String project-id ^String token ^Cloud cloud]
-;;       (if-let [iron-cache (:iron-cache iron-mq-endpoint)]
-;;         (if-let [client (get @iron-cache :client)]
-;;           client
-;;           (let [new-client (Client. project-id token cloud)]
-;;             (swap! iron-cache assoc :client new-client)
-;;             new-client))
-;;         nil)))
-
-
 (defn ironmq-transport
   "Constructs a new IronMQTransport instance and connects it.
 

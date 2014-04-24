@@ -1,55 +1,64 @@
 (ns com.paullegato.bureaucrat.endpoints.ironmq
-  "Implementation of the IEndpoint protocol for IronMQ.
+  "Implementation of the IQueueEndpoint protocol for IronMQ.
 
-   * Be aware that these functions throw exceptions if the network is down, 
-     since they cannot communicate with Iron in that case. A future version 
-     may wrap them in retry logic (or even better, a bridge from a local MQ.)
+   * IronMQ only supports strings as messages. If your message is not
+     a string, it will be coerced into a string with `pr-str`. It is
+     recommended that you use middleware to ensure that all messages
+     are stringified as you like before they reach this endpoint.
 
-   * Besides the queue name, you must specify an IronMQ project ID, OAuth2 token,
-     and server hostname to use. This is best
+   * Be aware that these functions throw exceptions if the network is
+     down, since they cannot communicate with Iron in that case. A
+     future version may wrap them in retry logic (or even better, a
+     bridge from a local MQ.)
+
+   * If a handler function throws an exception, the message is moved
+     to the dead letter queue without a retry. Future versions may
+     implement retries.
+
+   * Besides the queue name, you must specify an IronMQ project ID,
+     OAuth2 token, and server hostname to use. This is best
      accomplished by creating the
-     [http://dev.iron.io/worker/reference/configuration/](
-     environment variables or the iron.json config file described at Iron's website).
+     [http://dev.iron.io/worker/reference/configuration/]( environment
+     variables or the iron.json config file described at Iron's
+     website).
 
      For development, you can pass a hash with any of the following
      keys. If any are unspecified, the IronMQ client library will
-     attempt to fall back on the environment variables and config files
-     linked above.
+     attempt to fall back on the environment variables and config
+     files linked above.
 
-          ````
-          {:project-id \"your-project\"
-           :token      \"your-oauth2-token\"
-           :cloud      io.iron.ironmq.Cloud/ironAWSUSEast
-          }
-          ````
+          ```` {:project-id \"your-project\" :token
+          \"your-oauth2-token\" :cloud
+          io.iron.ironmq.Cloud/ironAWSUSEast } ````
 
    * The `:cloud` value must be one of the constants defined in the
      `[http://iron-io.github.io/iron_mq_java/io/iron/ironmq/Cloud.html](io.iron.ironmq.Cloud)`
-     class. 
+     class.
 
-   * IronMQ does not have intrinsic dead letter queues.
-     We simulate a limited DLQ here by creating a queue called \"DLQ\". If a message listener
-      function throws an exception, the message that caused the exception is placed on the DLQ.
+   * IronMQ does not have intrinsic dead letter queues.  We simulate a
+     limited DLQ here by creating a queue called \"DLQ\". If a message
+     listener function throws an exception, the message that caused
+     the exception is placed on the DLQ.
 
    * IronMQ's push mode requires you to expose an HTTP endpoint, with
      associated security annoyances. Future versions may support
      this. For now, we poll the queue every 5 seconds when a message
-     handler function is registered.
+     handler function is registered. Webhook push may be implemented
+     in the future.
 
   Internal Documentation for Developers
   -------------------------------------
-   * Messages are EDN-encoded before being sent to IronMQ, and messages
-     are EDN-decoded upon receipt from IronMQ
-   * :iron-cache is an atom of a map used to store state for the
-     IronMQ Java client library.
-   * :iron-cache also stores the threadpool that polls IronMQ in the
-     background and executes the listener function when messages
-     become available.
+
+
+  * :iron-cache stores the threadpool that
+     polls IronMQ in the background and executes the listener function
+     when messages become available.
 
    TODO: I don't like that the programmer must remember to unregister
-         the listener when it is no longer needed, since forgetting about one
-         will leak threads with no (easy) way to find a reference to
-         them and shut them down. That needs a better solution.
+         the listener when it is no longer needed, since forgetting
+         about one will leak threads with no (easy) way to find a
+         reference to them and shut them down. That needs a better
+         solution.
 "
 
   (:use com.paullegato.bureaucrat.endpoint
