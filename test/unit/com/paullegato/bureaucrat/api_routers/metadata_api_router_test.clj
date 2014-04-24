@@ -24,7 +24,9 @@
 
         (handler-for-call router "allowed-test-handler") => allowed-test-handler
         (handler-for-call router "forbidden-test-handler") => nil
-        (handler-for-call router "nonexistent-test-handler") => nil))
+        (handler-for-call router "nonexistent-test-handler") => nil
+        (handler-for-call router "") => nil
+        (handler-for-call router nil) => nil))
 
 
 (fact "handler functions are called properly"

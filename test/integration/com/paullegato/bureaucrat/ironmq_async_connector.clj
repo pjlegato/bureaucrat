@@ -17,20 +17,16 @@
 
             test-messages     ["Message one" "Message two" "Message three" "Message four"]
             test-messages-set (set test-messages)
-            
-            send-channel    (chan)
-            receive-channel (chan)]
+
+            send-channel      (endpoint> endpoint)
+            receive-channel   (endpoint< endpoint)]
 
         ;; Ensure correct initial state:
         (queue/purge! endpoint)
         (queue/count-messages endpoint) => 0
+
         (try
-
-          ;; Connect the endpoints:
-          (log/info "Connecting channels...")
-          (endpoint< endpoint send-channel)
-          (endpoint> endpoint receive-channel)
-
+ 
           ;; Send some messages via core.async:
           (log/info "Sending messages...")
           (doseq [message test-messages]
@@ -48,5 +44,6 @@
           (log/info "Test done.")
           (finally
             (queue/unregister-listener! endpoint)
-            (close! send-channel)
-            (close! receive-channel)))))
+            ;; (close! send-channel)
+            ;; (close! receive-channel)
+            ))))

@@ -7,6 +7,7 @@
   (:use [com.paullegato.bureaucrat.api-router]
         [slingshot.slingshot :only [try+ throw+]])
   (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
+            [com.paullegato.bureaucrat.util :refer [send-to-dlq!]]
             [onelog.core :as log]))
 
 
@@ -15,8 +16,11 @@
 
   IAPIRouter 
   (process-message! [component message]
-    (helpers/try-handler (handler-for-call component (:call message))
-                         message))
+    (if-let [handler (handler-for-call component (:call message))]
+      (helpers/try-handler handler message)
+      (do
+        (log/warn "[bureaucrat][table-api-router] Couldn't find a valid API handler for message; discarding. Message was: " message)
+        (send-to-dlq! message))))
 
   (handler-for-call [component call]
     (get @table-atom call))

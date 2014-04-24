@@ -127,13 +127,8 @@
   (purge! [component]
     "Unconditionally deletes all pending messages from the queue.")
 
-  (dead-letter-queue [component]
-    "Returns the component that is the dead letter queue associated
-    with the given component's queue.
-
-    Note that IronMQ does not intrinsically support dead letter queues
-    as of the time this was written, so don't rely on them if you're
-    using IronMQ! They can be simulated on our end, though."))
+  (transport [component]
+    "Returns the IMessageTransport associated with this endpoint."))
 
 
 

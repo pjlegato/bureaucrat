@@ -29,8 +29,9 @@
   IAPIRouter 
 
   (process-message! [component message]
-    (helpers/try-handler (handler-for-call component (:call message))
-                         message))
+    (if-let [handler (handler-for-call component (:call message))]
+      (helpers/try-handler handler message)))
+  
 
   (handler-for-call [component call]
     (let [call (str prefix call)

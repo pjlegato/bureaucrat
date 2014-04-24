@@ -34,6 +34,20 @@
         @result => test-message))
 
 
+(fact "Nonexistent handler functions are handled properly"
+      (let [router (table-api-router {})
+            result (atom nil)
+            test-message (str "Router test message -- " (rand 10000000))
+            second-test-message (str "Other router test message -- " (rand 10000000))
+            test-handler (fn [message] (reset! result message))]
+
+        (add-handler! router :foo test-handler)
+        
+        (process-message! router {:call    :nonexistent
+                                  :payload test-message})
+        @result => nil))
+
+
 (fact "the router deals with exceptions thrown by the handler function without throwing"
       (let [router (table-api-router {})
             test-handler (fn [message] (throw (Exception. "Test exception from table-api-router-test -- nothing to worry about!")))]

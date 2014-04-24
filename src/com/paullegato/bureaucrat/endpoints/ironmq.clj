@@ -247,7 +247,11 @@
       (swap! iron-cache dissoc :pool)))
 
   (purge! [component]
-    (.clear ^Queue (:queue component))))
+    (.clear ^Queue (:queue component)))
+
+
+  (transport [component]
+    (:transport component)))
 
 
 

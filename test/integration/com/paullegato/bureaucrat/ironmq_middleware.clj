@@ -23,13 +23,12 @@
                                #uuid "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"]
             test-messages-set (set test-messages)
             
-            send-channel            (chan)
-            send-channel-middleware (edn-encode< send-channel)
-            _                       (endpoint< endpoint send-channel-middleware)
+            send-endpoint-channel  (endpoint> endpoint)
+            send-channel           (edn-encode> send-endpoint-channel)
 
-            receive-channel-middleware (chan)
-            receive-channel            (edn-decode< receive-channel-middleware)
-            _                          (endpoint> endpoint receive-channel-middleware)]
+
+            receive-endpoint-channel (endpoint< endpoint)
+            receive-channel          (edn-decode< receive-endpoint-channel)]
 
         ;; Ensure correct initial state:
         (queue/purge! endpoint)
