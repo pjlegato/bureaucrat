@@ -2,12 +2,13 @@
 ## An MQ-based API Router for Clojure
 
 Bureaucrat is a Clojure utility library to ease the construction of
-asynchronous message queue based APIs. 
+asynchronous message queue based APIs.
 
 It provides an abstraction over MQ-based communications,
-implementations for various backend MQs, and a tiny router that
+implementations for various backend MQs, a tiny router that
 dispatches incoming API messages to designated Clojure functions,
-optionally sending replies back to the caller.
+optionally sending replies back to the caller, and a core.async based
+middleware system for plumbing this all together in arbitrary ways.
 
 Bureaucrat is alpha-stage software; API changes are still
 possible. Pull requests are welcome!
@@ -17,15 +18,109 @@ The library merely shuttles messages around between endpoints, which
 actually perform the useful work.
 
 ### What underlying transport mechanisms are supported?
-Bureaucrat supports HornetQ (within an Immutant container) and
-IronMQ. Core.async and Amazon SQS are planned. Pull requests are
-welcome! :)
+Bureaucrat currently supports IronMQ. 
 
-## Overview
+Previous versions supported HornetQ. Updating this to modern
+Bureaucrat style has been put on hold pending the release of Immutant
+2.0.
 
-Your application defines an ingress endpoint name (e.g. "foo-api"), a
-transport mechanism (such as HornetQ or IronMQ), and an API. The API
-is just a series of specially designated regular Clojure functions.
+Core.async and Amazon SQS are planned. Adding new endpoints is fairly
+easy; pull requests with tests are welcome! :)
+
+## Layers of Bureaucracy
+
+Bureaucrat can be used on several different levels. Each level
+provides additional services beyond those in the lower levels, while
+imposing additional constraints on what sort of messages can be used
+on that level.
+
+Layers (other than the bottommost Transport Layer) are implemented as
+core.async middleware; you use core.async channels to plumb them
+together in arbitrarily complex fashion, according to your needs. Many
+middleware components are provided, and it's easy to write more.
+
+An overview is provided in this README. For additional details,
+consult the docstrings in the source files.
+
+### Transport Layer
+
+The lowest level is the transport layer, embodied in the
+`IMessageTransport` and `IQueueEndpoint` protocols. This level
+provides a unified abstraction over named queue-like asynchronous
+endpoints. The endpoints must be able to accept strings and send them
+to a named endpoint on the transport mechanism. No other constraints
+on message format exist at this layer. 
+
+For example, some backend transports may accept Clojure data
+structures directly as messages, while others such as IronMQ only
+accept strings.
+
+Programming to this layer allows you to easily swap in different
+underlying transport backends without changing your code.
+
+An implementation is provided for IronMQ, with more on the way.
+
+
+### Core.async Connector Layer
+
+A small wrapper called async-connector bridges IQueueEndpoints and
+core.async channels in either direction, allowing the easy assembly of
+complex processing pipelines.
+
+### Serialization Layer
+
+Middleware is provided to serialize binary data into EDN, JSON, and
+Base64 formats. These can be attached to any IQueueEndpoint via
+core.async channels.
+
+If you need to interoperate with another system that requires JSON
+messages, for example, you can simply drop the JSON serialization
+middleware into your processing pipeline.
+
+## Encryption Layer
+
+An AES-128 shared-secret / symmetric encryption middleware component
+is provided to encrypt and decrypt messages.
+
+## Bureaucrat Normalization Layer
+
+This middleware coerces messages into a standard format for use by
+higher-order Bureaucrat services called the "Bureaucrat low-level
+format": all messages become Clojure maps. If the incoming message was
+not a map, a new map is created, and the original message is added as
+the value of the `:payload` key.
+
+A `:bureaucrat` key is added to the message for internal use by
+Bureaucrat components. User code should not rely on finding any
+particular value in this key, as it is not part of the public API and
+can change at any time. Currently, it contains a reference to the
+IQueueEndpoint where the message entered Bureaucrat, so that services
+such as the API router can send reply messages on the same transport.
+
+An egress normalizer is also provided that strips the `:bureaucrat`
+key out of any messages that pass through it. This message format may
+be called the "low-level inter-service format". It is identical to the
+"low-level Bureaucrat format" other than the absence of the
+`:bureaucrat` key.
+
+## API Router Overview
+
+The API router accepts messages from a core.async middleware pipeline
+and routes them to designated functions for processing. 
+
+Messages fed into the API router must be in "Bureaucrat API
+format". This format is an extension of the Bureaucrat low-level
+format. Besides being maps, messages must have at least the `:call`
+key. Its value specifies what API call to make.
+
+The Bureaucrat API format defines several additional optional keys:
+  * `:reply-to` is a string endpoint name where replies to the call
+     should be sent. The system will send them on the same
+     IMessageTransport that the message came in on.
+  * `:payload` is arbitrary data to be used by the API call.
+  
+API handlers are ordinary Clojure functions. The router protocol
+receives messages and 
 
 Messages arrive on the endpoint from somewhere -- exactly where is
 deliberately undefined, to promote loose coupling between
