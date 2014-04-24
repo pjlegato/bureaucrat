@@ -2,7 +2,8 @@
   "Utility functions for use in tests."
   (:require [immutant.messaging  :as mq]
             [com.paullegato.bureaucrat.transports.ironmq :as ironmq-transport]
-            [com.paullegato.bureaucrat.transport :as transport]))
+            [com.paullegato.bureaucrat.transport :as transport]
+            [com.paullegato.bureaucrat.endpoint  :as endpoint]))
 
 (def test-queue-name "test.queue")
 (def transport (atom nil)) ;; To hold the current IMessageTransport
@@ -26,7 +27,7 @@
   (let [a-transport (ironmq-transport/ironmq-transport)]
     (reset! transport a-transport)
     (reset! endpoint (transport/create-in-backend! a-transport test-queue-name nil))
-    (queue/purge! @endpoint)))
+    (endpoint/purge! @endpoint)))
 
 
 (defmacro with-timeout [ms & body]

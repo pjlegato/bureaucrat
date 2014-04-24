@@ -5,9 +5,8 @@
   * `table-atom` is an atom of a map. Keys are API call names
     (typically keywords), and values are functions."
   (:use [com.paullegato.bureaucrat.api-router]
-        [com.paullegato.bureaucrat.endpoint]
         [slingshot.slingshot :only [try+ throw+]])
-  (:require [ com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
+  (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
             [onelog.core :as log]))
 
 
@@ -15,21 +14,24 @@
   [table-atom]
 
   IAPIRouter 
-
   (process-message! [component message]
-    (helpers/try-handler component message))
+    (helpers/try-handler (handler-for-call component (:call message))
+                         message))
 
   (handler-for-call [component call]
     (get @table-atom call))
 
 
   IAdjustableAPIRouter
-
   (add-handler! [component api-call function]
     (swap! table-atom assoc api-call function))
 
   (remove-handler! [component api-call]
-    (swap! table-atom dissoc api-call)))
+    (swap! table-atom dissoc api-call))
+
+  IListableAPIRouter
+  (list-handlers! [component]
+    @table-atom))
 
 
 (defn table-api-router

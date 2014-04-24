@@ -16,9 +16,10 @@
    forget the trailing slash!)
 "
   (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
+            [com.paullegato.bureaucrat.endpoint :as endpoint]
             [onelog.core :as log])
   (:use [com.paullegato.bureaucrat.api-router]
-        [com.paullegato.bureaucrat.endpoint]
+
         [slingshot.slingshot :only [try+ throw+]]))
 
 
@@ -28,7 +29,8 @@
   IAPIRouter 
 
   (process-message! [component message]
-    (helpers/try-handler component message))
+    (helpers/try-handler (handler-for-call component (:call message))
+                         message))
 
   (handler-for-call [component call]
     (let [call (str prefix call)

@@ -117,6 +117,7 @@ The Bureaucrat API format defines several additional optional keys:
   * `:reply-to` is a string endpoint name where replies to the call
      should be sent. The system will send them on the same
      IMessageTransport that the message came in on.
+  * `:reply-call` is an optional `:call` to specify in the reply message.
   * `:payload` is arbitrary data to be used by the API call.
   
 API handlers are ordinary Clojure functions. The router protocol

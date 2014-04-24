@@ -2,8 +2,7 @@
   "Utility functions for interacting with IronMQ directly."
   (:use com.paullegato.bureaucrat.transport
         [slingshot.slingshot :only [try+ throw+]])
-  (:require [com.paullegato.bureaucrat.endpoints.ironmq :as endpoint]
-            [org.httpkit.client :as http]
+  (:require [org.httpkit.client :as http]
             [onelog.core        :as log]
             [cheshire.core      :as json])
   (:import [io.iron.ironmq Client Cloud]))

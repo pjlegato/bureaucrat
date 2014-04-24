@@ -12,21 +12,25 @@
   functions, optionally sending the return value of the function as a
   reply message.
 
-  Implementation
-  =============
+  Protocol
+  ========
 
   Each API router instance exposes a function that accepts one
-  argument, which is to be bound to an incoming message. If the
-  message conforms to the specified API call message format (defined
+  argument, an incoming message. 
+
+  If the message conforms to the  \"Bureaucrat API format\" (defined
   below), the router attempts to look up a function that corresponds
   to the message's specified API call. If a corresponding function is
-  found, it is invoked with the message's payload as its argument. If
-  the message requests a reply, the function's return value is
-  dispatched back to the caller.
+  found, it is invoked with the message's payload as its argument. 
 
-  The exact mechanism by which API calls named in messages are mapped
-  to specific Clojure functions is an implementation detail. Two
-  implementations are provided with Bureaucrat. 
+  The exact mechanism by which functions are looked up is an implementation 
+  detail. Two implementations are provided with Bureaucrat. One uses a map 
+  as a lookup table; the other uses metadata tags attached to functions to 
+  mark valid API handlers.
+
+  If the message includes a `:reply-to` key, the function's return value is
+  dispatched back to the caller on the same underlying IMessageTransport where
+  the original message arrived.
 
   The table-api-router
   must be given a map at instantiation that translates API calls to
@@ -41,51 +45,37 @@
   it easier to forget about an obsolete API call somewhere that may
   introduce security or functionality issues.
 
-  API Call Message Format
+  Bureaucrat API Format
   =======================
 
-  All API call messages must be maps. Map keys are automatically
-  transformed into Clojure keywords by the router, so that non-Clojure
-  systems can supply strings as keys.
+  All API call messages must be maps. Some keys have special meaning:
 
   * `:call` - the name of the API call to invoke. Required.
   * `:reply-to` - optional; if given, the return value of the API
-    function will be sent to the named queue.
+    function will be sent to the named endpoint on the same transport.
   * `:correlation-id` - optional; an arbitrary string that the caller
     can use to correlate replies with their source messages. If
     present, the router will set the same `:correlation-id` on
     replies.
   * `:payload` - optional; arbitrary data to pass to the API handler
-    function.
-  
-  Keys starting with `:x-` are reserved for internal use by
-  Bureaucrat. 
- 
-  * :x-ingress-endpoint: a reference to the IQueueEndpoint that
-    produced the message for us. This is currently used so that
-    Bureaucrat can send erroneous messages to its dead letter queue. 
-    The endpoint implementations are responsible for adding this.
-  * :x-error-processing: Holds details about errors encountered while 
-    attempting to process this message.
-"
+    function."
 
   (process-message! [component message]
-    "Processes the given message, which was received from the given
-    endpoint. Message is a normalized message as returned by an
-    IMessageNormalizer. Invokes the appropriate handler function for
-    the :call defined in the message if possible. If there is no such
-    handler function or the handler throws an exception, logs this
-    fact and places the message onto its endpoint's dead letter
-    queue.")
+    "Invokes the API call requested in the given message, if allowed.
+    If an appropriate handler function cannot be found or if the
+    handler throws an exception, logs this fact and places the message
+    onto its transport's dead letter queue.")
 
 
   (handler-for-call [component call]
-    "Returns the handler function used for the given API call."))
+    "Returns the handler function that would be used for the given API
+    call."))
 
 
 (defprotocol IAdjustableAPIRouter
   "Protocol for adding and removing API handler methods. Not all API
-  routers will be adjustable at runtime."
+  routers will be adjustable at runtime, or capable of enumerating 
+  their set of valid handlers."
 
   (add-handler! [component api-call function]
     "Defines function as the handler for api-call, replacing any
@@ -93,3 +83,10 @@
 
   (remove-handler! [component api-call]
     "Removes the API handler for api-call."))
+
+
+(defprotocol IListableAPIRouter
+  "For routers that can enumerate their routes."
+  (list-handlers! [component]
+    "Returns the set of all valid API handlers as a map. Keys are
+    calls, values are functions."))

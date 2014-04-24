@@ -21,8 +21,10 @@
             test-message (str "Router test message -- " (rand 10000000))
             second-test-message (str "Other router test message -- " (rand 10000000))
             test-handler (fn [message] (reset! result message))]
+
         (add-handler! router :foo test-handler)
-        (process-message! router {:call :foo
+        
+        (process-message! router {:call    :foo
                                   :payload test-message})
         @result => test-message
 
@@ -42,7 +44,7 @@
 
 (fact "the router deals with incorrectly formatted input messages without throwing"
       (let [router (table-api-router {})
-            test-handler (fn [message] (throw (Exception. "Test exception from table-api-router-test -- nothing to worry about!")))]
+            test-handler (fn [message] :foo)]
         (add-handler! router :foo test-handler)
         (process-message! router :asdf) => nil
         (process-message! router nil) => nil
