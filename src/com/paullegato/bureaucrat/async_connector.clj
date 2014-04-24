@@ -1,5 +1,10 @@
 (ns com.paullegato.bureaucrat.async-connector
-  "Facilities to connect an IQueueEndpoint to core.async channels."
+  "Facilities to connect an IQueueEndpoint to core.async channels.
+
+   Given an IQueueEndpoint and an async channel, `endpoint>` takes
+   messages from the endpoint and places them on the
+   channel. `endpoint<` takes messages from the channel and places
+   them on the endpoint."
   (:require [com.paullegato.bureaucrat.endpoint :as queue :refer [register-listener! unregister-listener! send!]]
             [clojure.core.async :as async :refer [<! >! put! go go-loop]]
             [onelog.core :as log]))
@@ -15,14 +20,14 @@
   The listener will unregister itself if its channel is closed."
   ([endpoint channel] (endpoint> endpoint channel 4))
   ([endpoint channel concurrency]
-      (register-listener! endpoint
-                          (fn [message]
-                            (log/debug "[bureaucrat] async-connector/endpoint> got message " message ", dispatching to channel")
-                            (when-not (put! channel message)
-                              (log/error "[bureaucrat] async-connector/endpoint>: unregistering my listener function because my core.async channel has been closed! Was processing message: " message)
-                              (unregister-listener! endpoint)
-                              (throw (Exception. "[bureaucrat] async-connector/endpoint>'s core.async channel was closed"))))
-                          concurrency)))
+     (register-listener! endpoint
+                         (fn [message]
+                           (log/debug "[bureaucrat] async-connector/endpoint> got message " message ", dispatching to channel")
+                           (when-not (put! channel message)
+                             (log/error "[bureaucrat] async-connector/endpoint>: unregistering my listener function because my core.async channel has been closed! Was processing message: " message)
+                             (unregister-listener! endpoint)
+                             (throw (Exception. "[bureaucrat] async-connector/endpoint>'s core.async channel was closed"))))
+                         concurrency)))
 
 
 (defn endpoint<

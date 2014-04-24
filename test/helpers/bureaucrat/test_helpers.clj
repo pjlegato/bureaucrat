@@ -1,11 +1,12 @@
 (ns helpers.bureaucrat.test-helpers
   "Utility functions for use in tests."
   (:require [immutant.messaging  :as mq]
-            [com.paullegato.bureaucrat.endpoints.ironmq :as im]
-            [com.paullegato.bureaucrat.endpoint :as queue]))
+            [com.paullegato.bureaucrat.transports.ironmq :as ironmq-transport]
+            [com.paullegato.bureaucrat.transport :as transport]))
 
 (def test-queue-name "test.queue")
-
+(def transport (atom nil)) ;; To hold the current IMessageTransport
+(def endpoint (atom nil))      ;; To hold the current IQueueEndpoint
 
 (defn spin-on 
   "Spins at most n times waiting for fn to be true. Each spin is
@@ -18,31 +19,16 @@
        (recur fn (- n 1) timeout))))
 
 
-(defn reset-queue!
-  "Ensure that the given queue is empty of any persistent messages and
-   does not exist in the backend, in case it leaks out of a failed
-   test run."
-  [name]
- (let [queue (mq/as-queue name)] 
-   (mq/start queue)
-   (.removeMessages (immutant.messaging.hornetq/destination-controller queue) "")
-   (mq/stop queue :force true)))
-
-
-(defn reset-ironmq-test-queue!
+(defn create-ironmq-test-queue!
   "Ensure that the test queue is empty of any persistent messages and
-   does not exist in the backend, in case it leaks out of a failed
-   test run."
+   exists in the backend"
   []
-  (try
-    (let [queue (im/start-ironmq-endpoint! test-queue-name)] 
-      (queue/destroy-in-backend! queue))
-    (catch io.iron.ironmq.HTTPException e
-      (if-not (= (.getMessage e) "Queue not found")
-        ;; re-throw if it is anything other than the queue not existing
-        (throw e)))))
+  (let [a-transport (ironmq-transport/ironmq-transport)]
+    (reset! transport a-transport)
+    (reset! endpoint (transport/create-in-backend! a-transport test-queue-name nil))
+    (queue/purge! @endpoint)))
 
 
 (defmacro with-timeout [ms & body]
   `(let [f# (future ~@body)]
-     (.get f# ~ms java.util.concurrent.TimeUnit/MILLISECONDS)))
+     (.get ^java.util.concurrent.Future f# ~ms java.util.concurrent.TimeUnit/MILLISECONDS)))

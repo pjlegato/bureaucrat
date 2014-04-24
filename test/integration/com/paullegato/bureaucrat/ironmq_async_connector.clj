@@ -3,17 +3,17 @@
   (:require [com.paullegato.bureaucrat.endpoints.ironmq :as iq]
             [com.paullegato.bureaucrat.endpoint :as queue]
             [onelog.core :as log]
-            [clojure.core.async :as async :refer [<!! >!! close! go chan go-loop]]
+            [clojure.core.async :as async :refer [<!! >!! close! chan]]
             [com.paullegato.bureaucrat.async-connector :refer [endpoint> endpoint<]])
   (:use [midje.sweet]
         [helpers.bureaucrat.test-helpers]))
 
 
-(namespace-state-changes [(before :facts (reset-ironmq-test-queue!))])
+(namespace-state-changes [(before :facts (create-ironmq-test-queue!))])
 
 
 (fact "we can hook an IronMQ queue up to core.async"
-      (let [endpoint  (iq/start-ironmq-endpoint! test-queue-name)
+      (let [endpoint @endpoint
 
             test-messages     ["Message one" "Message two" "Message three" "Message four"]
             test-messages-set (set test-messages)

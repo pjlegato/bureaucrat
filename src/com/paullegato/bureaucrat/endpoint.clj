@@ -20,59 +20,6 @@
 ;;
 
 
-(defprotocol IMessageNormalizer
-  "IMessageNormalizer provides a function 'ingress' that ensures that
-  a given message is in a normalized structural format. Messages
-  returned from this function will be Clojure maps with at least an
-  `:x-ingress-endpoint key`. This key is a reference to the
-  IQueueEndpoint from which we received the message.
-
-  normalize-egress removes the :x-ingress-endpoint key in preparatio
-  for sending an outbound message, because its value is not
-  serializable.
-
-  If the incoming message is already a Clojure map, the normalizer
-  function should extend it by adding the `:x-ingress-endpoint` key.
-
-  Normalizers may optionally add any other metadata they like,
-  provided that the keys begin with :x-.
-
-  TODO: It would be nice to figure out how to auto-remove any non-EDN
-  serializable forms from outbound messages. Failing that, perhaps we
-  should use different prefixes for non-EDN serializable metadata."
-  
-  (normalize-ingress [component endpoint message])
-  (normalize-egress [component message]))
-
-
-(deftype MessageNormalizer []
-  IMessageNormalizer
-  (normalize-ingress [component endpoint message]
-    (let [new-message (if (map? message)
-                        message
-                        {:payload message})]
-      (-> new-message
-       (assoc :x-ingress-endpoint endpoint)
-       (assoc :x-ingress-time (time/now)))))
-
-  (normalize-egress [component message]
-    (if (map? message)
-      (-> message
-          (dissoc :x-ingress-endpoint)
-          (dissoc :x-ingress-time))
-      message)))
-
-;; As an implementation detail, and since this is unlikely to ever
-;; change, we provide one standard global message normalizer for
-;; everyone to use. Implementations are free to ignore it and define
-;; their own if they like.
-(def ^:dynamic *message-normalizer* (MessageNormalizer.))
-
-(defn message-normalizer
-  "Returns a standard MessageNormalizer."
-  []
-  *message-normalizer*)
-
 
 (defprotocol IQueueEndpoint
 
@@ -85,10 +32,6 @@
    Note that some implementations (notably IronMQ) do not support
    millisecond resolution on ttls and timeouts. In such cases, they
    will round the time you give up to the nearest second. "
-
-  (get-backend   [component]
-    "Returns an implementation-specific endpoint interface object if
-    the endpoint has been created in the backend; else nil.")
 
   (lookup [component queue-name]
     "Returns another IQueueEndpoint on the same underlying transport as the component, but with the given
@@ -104,7 +47,6 @@
      implementation's backend. The backend might reject the destroy
      attempt if the queue has messages in it (or it might not,
      depending on the underlying implementation.)")
-
 
   (force-destroy! [component]
     "Unconditionally destroys the endpoint in the

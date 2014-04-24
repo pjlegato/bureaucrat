@@ -40,6 +40,6 @@
                                   [midje "1.6.3"     ;; Testing framework.
                                    :exclusions [dynapath]] ;; Midje's dynapath dependency conflicts with Immutant's newer one.
                                   ]}}
-
+  :global-vars {*warn-on-reflection* true}
   :immutant {:nrepl-port 7654
              :context-path "/"})
