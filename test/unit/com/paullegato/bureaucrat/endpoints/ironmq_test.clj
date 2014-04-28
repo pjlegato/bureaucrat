@@ -6,8 +6,9 @@
             [com.paullegato.bureaucrat.transports.util.ironmq :as util]
             [com.paullegato.bureaucrat.endpoint         :as queue]
             [com.paullegato.bureaucrat.transport        :as transport]
+            [com.paullegato.bureaucrat.data-endpoint    :as data]
             [com.paullegato.bureaucrat.channel-endpoint :as channel]
-            [clojure.core.async :as async :refer [<!! >!!]]
+            [clojure.core.async :as async :refer [<!! >!! close!]]
             [com.paullegato.bureaucrat.endpoints.ironmq :as iq]))
 
 
@@ -29,6 +30,7 @@
 (fact "messages are counted properly"
       (let [endpoint @endpoint
             test-message "foo"]
+        (queue/purge! endpoint)
         (queue/count-messages endpoint) => 0
         (queue/send! endpoint test-message {:ttl 100000})
         (queue/count-messages endpoint) => 1
@@ -78,7 +80,8 @@
           (queue/count-messages endpoint) => 0
 
           @result => test-message
-          (finally (queue/unregister-listener! endpoint)))))
+          (finally
+            (queue/unregister-listener! endpoint)))))
 
 
 (fact "listener unregistration works"
@@ -108,7 +111,8 @@
 
           ;; Result should still be the first test-message
           @result => (contains test-message)
-          (finally (queue/unregister-listener! endpoint)))))
+          (finally
+            (queue/unregister-listener! endpoint)))))
 
 ;;
 ;; Redelivery is not implemented yet in IronMQ -- see comments in ironmq.clj.
@@ -169,7 +173,8 @@
           (spin-on #(< 0 (queue/count-messages dlq)) 10 1000)
 
           (queue/receive! dlq 10000) => test-message
-          (finally (queue/unregister-listener! endpoint)))))
+          (finally
+            (queue/unregister-listener! endpoint)))))
 
 
 (fact "we can enqueue via async channels"
@@ -182,9 +187,48 @@
 
 (fact "we can dequeue via async channels"
       (let [endpoint @endpoint
-            ;; Don't spin forever in case of problems, time out after 10 seconds:
-            receive-channel (async/pipe (channel/dequeue-channel endpoint) 
+            recv (channel/dequeue-channel endpoint) 
+            ;; Don't spin forever in case of problems during the test, time out after 10 seconds:
+            receive-channel (async/pipe recv
                                         (async/timeout 10000))
             message "Foo bar baz"]
-        (queue/send! endpoint message {:ttl 10000})
-        (<!! receive-channel) => message))
+        (try
+          (queue/send! endpoint message {:ttl 10000})
+          (<!! receive-channel) => message
+          (finally
+            (queue/unregister-listener! endpoint)
+            (close! recv)))))
+
+
+(fact "JSON transcoding works"
+      (let [endpoint (create-ironmq-test-queue! {:encoding :json})
+            test-map {:foo 123 :bar "baz" :asdf [345 678]}
+            send-channel        (data/send-channel endpoint)
+            recv                (data/receive-channel endpoint)
+            receive-channel     (async/pipe recv
+                                            (async/timeout 10000))]
+        (try
+          (>!! send-channel test-map) => truthy
+          (<!! receive-channel) => test-map
+          (finally
+            (queue/unregister-listener! endpoint)
+            (close! send-channel)
+            (close! recv)))))
+
+
+(fact "JSON encoding works"
+      (let [endpoint (create-ironmq-test-queue! {:encoding :json})
+            test-map {:foo 123 :bar "baz" :asdf [345 678]}
+            send-channel        (data/send-channel endpoint)
+
+            ;; This uses the underlying raw channel without decoding:
+            recv                (channel/dequeue-channel endpoint)
+            receive-channel     (async/pipe recv
+                                            (async/timeout 10000))]
+        (try
+          (>!! send-channel test-map) => truthy
+          (<!! receive-channel) => "{\"asdf\":[345,678],\"bar\":\"baz\",\"foo\":123}"
+          (finally
+            (queue/unregister-listener! endpoint)
+            (close! send-channel)
+            (close! recv)))))

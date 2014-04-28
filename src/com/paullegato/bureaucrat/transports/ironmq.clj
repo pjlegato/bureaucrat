@@ -13,13 +13,15 @@
 ;; What to call the dead letter queue
 (def dlq-name "dead-letter-queue")
 
-(defrecord IronMQTransport [
-                            ^Client client ;; The Java Client object underlying this IronMQ connection
-                            ]
+(defrecord IronMQTransport [^Client client] ;; The Java Client object underlying this IronMQ connection
   IMessageTransport
 
   (create-in-backend! [component name options]
-    ;; Options is passed through to IronMQ.
+    ;; Options may have the :encoding key with a value of :json or
+    ;; :edn. Messages going through the transport will be transncoded
+    ;; in the given encoding. If not given, no encoding is used.
+
+    ;; Remaining options are passed through to IronMQ.
     ;; See http://dev.iron.io/mq/reference/api/#update_a_message_queue
     ;; for allowed values.
 
@@ -32,22 +34,31 @@
     ;; JMS. Since Bureaucrat expects queue semantics, you will get
     ;; undefined results if your IronMQ queue is not in regular "pull"
     ;; / queue mode.
-    (if (ironmq-request (:client component)
-                        :post
-                        (str "/queues/" name)
-                        (or options {}))
-      (endpoint/ironmq-endpoint name component)))
+    (let [encoding (:encoding options)
+          options (dissoc options :encoding)]
+      (if (ironmq-request (:client component)
+                          :post
+                          (str "/queues/" name)
+                          (or options {}))
+        (case encoding
+          :json (endpoint/ironmq-json-endpoint name component)
+          :edn  (throw (Exception. "EDN encoding not implemented yet!"))
+          (endpoint/ironmq-endpoint name component)))))
+
 
   (lookup [component queue-name]
     (if (queue-exists? name)
       (endpoint/ironmq-endpoint name nil)))
 
+
   (destroy-in-backend! [component queue-name]
     (if-let [endpoint (lookup component queue-name)]
       (.destroy ^Queue (:queue endpoint))))
 
+
   (force-destroy! [component name]
     (destroy-in-backend! component name))
+
 
   (dead-letter-queue [component]
     (create-in-backend! component dlq-name nil)))

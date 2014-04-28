@@ -22,14 +22,20 @@
 
 (defn create-ironmq-test-queue!
   "Ensure that the test queue is empty of any persistent messages and
-   exists in the backend"
-  []
-  (let [a-transport (ironmq-transport/ironmq-transport)]
-    (reset! transport a-transport)
-    (reset! endpoint (transport/create-in-backend! a-transport test-queue-name nil))
-    (endpoint/purge! @endpoint)))
+  exists in the backend. Stores the endpoint in the 'endpoint' atom, and
+  returns a copy of the new endpoint."
+  ([] (create-ironmq-test-queue! nil))
+  ([endpoint-options]
+     (let [a-transport (ironmq-transport/ironmq-transport)]
+       (reset! transport a-transport)
+       (reset! endpoint (transport/create-in-backend! a-transport test-queue-name endpoint-options))
+       (endpoint/purge! @endpoint)
+       @endpoint)))
 
 
-(defmacro with-timeout [ms & body]
+(defmacro with-timeout 
+  "Runs the given code, aborting it after ms milliseconds if it has not
+  finished executing yet."
+  [ms & body]
   `(let [f# (future ~@body)]
      (.get ^java.util.concurrent.Future f# ~ms java.util.concurrent.TimeUnit/MILLISECONDS)))
