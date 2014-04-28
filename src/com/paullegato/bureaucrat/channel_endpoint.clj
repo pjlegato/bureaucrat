@@ -1,6 +1,12 @@
-(ns com.paullegato.bureaucrat.async-connector
+(ns com.paullegato.bureaucrat.channel-endpoint
   "Facilities to connect an IQueueEndpoint to core.async channels.
 
+  The IChannelEndpoint protocol defines the capability to provide
+  core.async endpoints for enqueueing and dequeueing messages on the
+  underlying endpoint. It is initially intended to be built on top
+  of an IQueueEndpoint, but other mechanisms are possible.
+
+   Helper methods are provided to perform the connection.
    Given an IQueueEndpoint and an async channel, `endpoint>` takes
    messages from the endpoint and places them on the
    channel. `endpoint<` takes messages from the channel and places
@@ -8,6 +14,21 @@
   (:require [com.paullegato.bureaucrat.endpoint :as queue :refer [register-listener! unregister-listener! send!]]
             [clojure.core.async :as async :refer [<! >! put! go go-loop chan]]
             [onelog.core :as log]))
+
+
+(defprotocol IChannelEndpoint
+  "The IChannelEndpoint protocol defines the capability to provide
+  core.async endpoints for transmitting and receiving messages to the
+  same underlying endpoint. It is initially intended to be built on top
+  of an IQueueEndpoint, but other mechanisms are possible.
+
+  Implementations should not actually preconnect any core.async channels
+  until the corresponding method is actually called. For example, an
+  IQueueEndpoint whose purpose is to transmit to remote systems would
+  not work very well if all messages written to it were immediately
+  dequeued onto a local async channel!"
+  (enqueue-channel [component] "Returns a core.async channel whose contents will be placed onto the underlying endpoint's queue.")
+  (dequeue-channel [component] "Returns a core.async channel where messages received on the underlying endpoint will be placed."))
 
 
 (defn endpoint<

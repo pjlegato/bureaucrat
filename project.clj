@@ -16,7 +16,7 @@
                  [com.stuartsierra/component "0.2.1"]  ;; Software components framework
                  [org.clojure/math.numeric-tower "0.0.4"]
 
-                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]
+                 [org.clojure/core.async "0.1.298.0-2a82a1-alpha"]
                  [com.climate/claypoole "0.2.1"]  ;; Thread pool management
                  [org.clojure/tools.reader "0.8.4"] ;; Safe EDN parser
                  [onelog "0.4.3"]  ;; Logging library

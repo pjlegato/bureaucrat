@@ -3,6 +3,7 @@
   (:require [com.paullegato.bureaucrat.api-router :as api-router]
             [com.paullegato.bureaucrat.transport  :as transport]
             [com.paullegato.bureaucrat.endpoint   :as endpoint]
+            [com.paullegato.bureaucrat.util       :as util :refer [send-to-dlq!]]
             [onelog.core :as log]))
 
 (defn valid-api-message?

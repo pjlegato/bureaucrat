@@ -39,56 +39,115 @@ core.async middleware; you use core.async channels to plumb them
 together in arbitrarily complex fashion, according to your needs. Many
 middleware components are provided, and it's easy to write more.
 
+
+* Transport layer - send and receive strings or byte arrays.
+
 An overview is provided in this README. For additional details,
 consult the docstrings in the source files.
 
-### Transport Layer
 
-The lowest level is the transport layer, embodied in the
+
+
+## Transport Layer
+
+The lowest specification level is the transport layer, embodied in the
 `IMessageTransport` and `IQueueEndpoint` protocols. This level
 provides a unified abstraction over named queue-like asynchronous
-endpoints. The endpoints must be able to accept strings and send them
-to a named endpoint on the transport mechanism. No other constraints
-on message format exist at this layer. 
+endpoints. The endpoints must be able to send and receive non-nil data
+to and from a named endpoint on the transport mechanism. No other
+constraints on message format exist at this layer.
 
-For example, some backend transports may accept Clojure data
-structures directly as messages, while others such as IronMQ only
-accept strings.
+`IMessageTransport` defines a system for creating and destroying
+uniquely named `IQueueEndpoints`. These map directly onto an
+asynchronous message queueing system and its queues. For example, we
+can build an `IMessageTransport` implementation encapsulating HornetQ,
+IronMQ, core.async, ZeroMQ, or similar services; the `IQueueEndpoints`
+are specific named queues or commmunications channels implemented by
+those services.
 
-Programming to this layer allows you to easily swap in different
-underlying transport backends without changing your code.
+`IQueueEndpoints` are created by an `IMessageTransport`
+implementation, and represent specific named queues on that
+transport. `IQueueEndpoints` are able to send and receive messages,
+arbitrary data structures whose format is subject to the limitations
+of the underlying transport mechanism. For example, an IronMQ-based
+`IMessageTransport` can only transmit string messages, while a
+core.async `IMessageTransport` can transmit any Clojure data structure
+as a message.
 
-An implementation is provided for IronMQ, with more on the way.
+nil and empty string messages are specifically disallowed (because
+they confuse code that uses nil for other purposes); all messages must
+be non-nil and non-zero length.
+
+## Channel Layer
+
+Above the Transport Layer is the Channel Layer, defined by the
+`IChannelEndpoint` protocol. At this level, endpoints must be capable
+of enqueueing and dequeueing messages via core.async channels.
+
+The `channel-endpoint` namespace provides the `IChannelEndpoint`
+protocol and functions that produce send and receive channels from any
+`IQueueEndpoint`. Various serialization middleware is provided
 
 
-### Core.async Connector Layer
+## Channel Middleware
 
-A small wrapper called async-connector bridges IQueueEndpoints and
-core.async channels in either direction, allowing the easy assembly of
-complex processing pipelines.
+Various middleware adapters are provided to perform transformations on
+core.async data flows, and it's easy to write more.
 
-### Serialization Layer
+### Serialization Middleware
 
 Middleware is provided to serialize binary data into EDN, JSON, and
-Base64 formats. These can be attached to any IQueueEndpoint via
-core.async channels.
+Base64 formats, and to deserialize strings in those formats. These can
+be attached to any `IChannelEndpoint`.
 
 If you need to interoperate with another system that requires JSON
 messages, for example, you can simply drop the JSON serialization
-middleware into your processing pipeline.
+middleware into your outbound message pipeline, then write regular
+Clojure data structures to the pipeline.
 
-## Encryption Layer
+### Encryption Middleware
 
 An AES-128 shared-secret / symmetric encryption middleware component
 is provided to encrypt and decrypt messages.
 
-## Bureaucrat Normalization Layer
 
-This middleware coerces messages into a standard format for use by
+## Data Layer
+
+At the Data Layer, defined by the `IDataEndpoint` protocol, endpoints
+must be capable of transmitting general Clojure data structures such
+as maps and strings as messages, via core.async channels.
+
+Transport Layer implementations that are incapable of transmitting
+Clojure data structures as messages directly can use middleware to
+extend their capabilities. For example, an IronMQ transport can only
+transmit strings as messages, but the EDN or JSON middlewares can be
+used to serialize Clojure data into strings and back for transmission
+on IronMQ.
+
+Still other Transport Layers may already be capable of transmitting
+Clojure data structures, and will only require a thin wrapper to tie
+them to core.async channels.
+
+All maps at this layer must have keyword keys. JSON does not support
+keywords, so keyword keys are typically serialized as strings when
+they become JSON.
+
+The requirement that all Channel Layer compliant endpoints expose
+core.async connectors allows them to easily participate in complex
+middleware graphs.
+
+
+## Bureaucrat Layer
+
+The Normalized Layer defines a standard message format for use by
 higher-order Bureaucrat services called the "Bureaucrat low-level
-format": all messages become Clojure maps. If the incoming message was
-not a map, a new map is created, and the original message is added as
-the value of the `:payload` key.
+format": all messages must be Clojure maps, and certain keys are
+defined to store specific metadata as their values.
+
+Middleware is provided to translate messages into this format and
+decorate them with metadata. If the incoming message was not a map, a
+new map is created, and the original message is added as the value of
+the `:payload` key.
 
 A `:bureaucrat` key is added to the message for internal use by
 Bureaucrat components. User code should not rely on finding any
@@ -103,7 +162,22 @@ be called the "low-level inter-service format". It is identical to the
 "low-level Bureaucrat format" other than the absence of the
 `:bureaucrat` key.
 
-## API Router Overview
+## Bureaucrat API Router Layer
+
+The Bureaucrat API message format is defined as an extension of the
+Bureaucrat low-level format defined above, with additional special
+keys.
+
+The `:call` key is required; its value specifies the API call that is
+being made. The router looks up the appropriate handler function for a
+given call and executes it. The optional but usually present
+`:payload` key is passed to the handler function as its argument. If
+the message requires a reply and the function returns a non-nil value,
+the API router creates a new message on the same transport, addressed
+to the endpoint named in the `:reply-to` field of the incoming message.
+
+
+### API Router Details
 
 The API router accepts messages from a core.async middleware pipeline
 and routes them to designated functions for processing. 

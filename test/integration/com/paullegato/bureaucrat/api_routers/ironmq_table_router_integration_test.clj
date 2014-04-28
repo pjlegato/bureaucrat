@@ -31,7 +31,8 @@
             endpoint @endpoint
             channel  (chan)
             dlq      (transport/dead-letter-queue (endpoint/transport endpoint))
-            test-message (str "IM/router integration test message -- " (rand 10000000))
+
+            test-message        (str "IM/router integration test message -- " (rand 10000000))
             second-test-message (str "IM/router integration test message -- " (rand 10000000))]
 
         (endpoint/purge! dlq)

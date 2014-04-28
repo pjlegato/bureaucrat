@@ -6,6 +6,8 @@
             [com.paullegato.bureaucrat.transports.util.ironmq :as util]
             [com.paullegato.bureaucrat.endpoint         :as queue]
             [com.paullegato.bureaucrat.transport        :as transport]
+            [com.paullegato.bureaucrat.channel-endpoint :as channel]
+            [clojure.core.async :as async :refer [<!! >!!]]
             [com.paullegato.bureaucrat.endpoints.ironmq :as iq]))
 
 
@@ -36,7 +38,7 @@
         (queue/count-messages endpoint) => 4))
 
 
-(fact "messages are purged properly (may erroneously fail if IronMQ is heavily loaded when run)"
+(fact "messages are purged properly"
       (let [endpoint @endpoint
             test-message "foo"]
         (queue/send! endpoint test-message {:ttl 100000})
@@ -168,3 +170,21 @@
 
           (queue/receive! dlq 10000) => test-message
           (finally (queue/unregister-listener! endpoint)))))
+
+
+(fact "we can enqueue via async channels"
+      (let [endpoint @endpoint
+            send-channel (channel/enqueue-channel endpoint)
+            message "Asdf Foo bar baz"]
+        (>!! send-channel message) => truthy
+        (queue/receive! endpoint 10000) => message))
+
+
+(fact "we can dequeue via async channels"
+      (let [endpoint @endpoint
+            ;; Don't spin forever in case of problems, time out after 10 seconds:
+            receive-channel (async/pipe (channel/dequeue-channel endpoint) 
+                                        (async/timeout 10000))
+            message "Foo bar baz"]
+        (queue/send! endpoint message {:ttl 10000})
+        (<!! receive-channel) => message))

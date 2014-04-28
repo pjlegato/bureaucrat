@@ -20,3 +20,6 @@
                    "\nMessage was: " message)))
     (log/error "[bureaucrat][api-router] Couldn't send message to the dead letter queue: "
                "Couldn't find an ingress-transport on the message! Message was: " message)))
+
+
+
