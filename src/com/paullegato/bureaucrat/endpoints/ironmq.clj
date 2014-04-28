@@ -68,11 +68,12 @@
         [slingshot.slingshot :only [try+ throw+]])
   (:require [clojure.math.numeric-tower :as math]
 
-            [cheshire.core      :as json]
+            [com.paullegato.bureaucrat.middleware.json :as json :refer [json-encode> json-decode<]]
+            [com.paullegato.bureaucrat.middleware.edn  :as edn  :refer [edn-encode>  edn-decode<]]
             [onelog.core        :as log]
             [org.httpkit.client :as http]
             [com.climate.claypoole :as cp]
-            [clojure.tools.reader.edn :as edn]
+
             [clojure.core.async :as async :refer [map> map<]]
 
             [com.paullegato.bureaucrat.util :as util]
@@ -266,7 +267,6 @@
 
 
                            poller-batch-size ;; The listener poller will fetch messages in batches of this size.
-                           encoding ;; Wire format to use. Currently supported values are :edn and :json.
                            ])
 
 (extend IronMQEndpoint 
@@ -286,18 +286,35 @@
 
 
                                  poller-batch-size ;; The listener poller will fetch messages in batches of this size.
-                                 encoding ;; Wire format to use. Currently supported values are :edn and :json.
                                  ])
 
 
 (extend IronMQ-JSON-Endpoint
   IQueueEndpoint iqueueendpoint-implementations
   IChannelEndpoint ichannelendpoint-implementations
-  IDataEndpoint {:send-channel    #(map> json/encode (channel-endpoint/enqueue-channel %))
-                 :receive-channel #(map< (fn [msg] (json/decode msg true))
-                                         (channel-endpoint/dequeue-channel %))})
+  IDataEndpoint {:send-channel    #(json-encode> (channel-endpoint/enqueue-channel %))
+                 :receive-channel #(json-decode< (channel-endpoint/dequeue-channel %))})
 
 
+;; Like the plain IronMQEndpoint, but implements IDataEndpoint to do JSON transcoding.
+(defrecord IronMQ-EDN-Endpoint [^String name
+
+                                 transport ;; IMessageTransport associated with this endpoint
+                                 ^Queue queue ;; Underlying Java queue object associated with this endpoint
+                                 
+                                 iron-cache ;; atom of a map which holds references to the Java
+                                 ;; objects used to communicate with Iron, and the 
+                                 ;; Claypoole thread pool that runs the async handlers
+
+
+                                 poller-batch-size ;; The listener poller will fetch messages in batches of this size.
+                                 ])
+
+(extend IronMQ-EDN-Endpoint
+  IQueueEndpoint iqueueendpoint-implementations
+  IChannelEndpoint ichannelendpoint-implementations
+  IDataEndpoint {:send-channel    #(edn-encode> (channel-endpoint/enqueue-channel %))
+                 :receive-channel #(edn-decode< (channel-endpoint/dequeue-channel %))})
 
 
 (defn ironmq-endpoint
@@ -312,7 +329,6 @@
                         :queue (.queue ^Client (:client transport) name)
                         :transport transport
                         :poller-batch-size 100
-                        :encoding :edn
                         :iron-cache (atom {})}))
 
 
@@ -328,7 +344,21 @@
                               :queue (.queue ^Client (:client transport) name)
                               :transport transport
                               :poller-batch-size 100
-                              :encoding :edn
+                              :iron-cache (atom {})}))
+
+
+(defn ironmq-edn-endpoint
+  "Constructor for IronMQ JSON-transcoded queue endpoints. Note that
+  this does not create anything in the backend; it just wraps the
+  Clojure access points to the backend.
+
+  Use the IronMQ IMessageTransport instance to create new instances
+  rather than calling this directly!" 
+  [name transport]
+  (map->IronMQ-EDN-Endpoint {:name name
+                              :queue (.queue ^Client (:client transport) name)
+                              :transport transport
+                              :poller-batch-size 100
                               :iron-cache (atom {})}))
 
 

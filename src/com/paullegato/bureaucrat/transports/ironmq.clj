@@ -42,7 +42,7 @@
                           (or options {}))
         (case encoding
           :json (endpoint/ironmq-json-endpoint name component)
-          :edn  (throw (Exception. "EDN encoding not implemented yet!"))
+          :edn  (endpoint/ironmq-edn-endpoint name component)
           (endpoint/ironmq-endpoint name component)))))
 
 

@@ -232,3 +232,37 @@
             (queue/unregister-listener! endpoint)
             (close! send-channel)
             (close! recv)))))
+
+
+(fact "EDN transcoding works"
+      (let [endpoint (create-ironmq-test-queue! {:encoding :edn})
+            test-map {:foo 123 :bar "baz" :asdf ['foobar 345 678]}
+            send-channel        (data/send-channel endpoint)
+            recv                (data/receive-channel endpoint)
+            receive-channel     (async/pipe recv
+                                            (async/timeout 10000))]
+        (try
+          (>!! send-channel test-map) => truthy
+          (<!! receive-channel) => test-map
+          (finally
+            (queue/unregister-listener! endpoint)
+            (close! send-channel)
+            (close! recv)))))
+
+
+(fact "EDN encoding works"
+      (let [endpoint (create-ironmq-test-queue! {:encoding :edn})
+            test-map {:foo 123 :bar "baz" :asdf ['foobar 345 678]}
+            send-channel        (data/send-channel endpoint)
+
+            ;; This uses the underlying raw channel without decoding:
+            recv                (channel/dequeue-channel endpoint)
+            receive-channel     (async/pipe recv
+                                            (async/timeout 10000))]
+        (try
+          (>!! send-channel test-map) => truthy
+          (<!! receive-channel) => "{:asdf [foobar 345 678], :bar \"baz\", :foo 123}"
+          (finally
+            (queue/unregister-listener! endpoint)
+            (close! send-channel)
+            (close! recv)))))
