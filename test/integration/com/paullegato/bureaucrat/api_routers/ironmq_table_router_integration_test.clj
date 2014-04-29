@@ -57,7 +57,7 @@
                                      (async/timeout 90000))
             send-channel        (normalize-egress> (data/send-channel endpoint))
 
-            ;; Don't wait forever trying to receive; time out in 10 seconds in case of error
+            ;; Don't wait forever trying to receive; time out in case of error
             receive-channel     (-> (data/receive-channel endpoint)
                                     (normalizer/normalize-ingress< endpoint)
                                     (async/pipe (async/timeout 90000)))
