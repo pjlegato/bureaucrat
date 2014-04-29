@@ -61,7 +61,7 @@
 
 
   (dead-letter-queue [component]
-    (create-in-backend! component dlq-name nil)))
+    (create-in-backend! component dlq-name {:encoding :edn})))
 
 
 (defn ironmq-transport

@@ -2,8 +2,12 @@
   "API router (instance of IAPIRouter) that uses a predefined lookup
   table to map API calls to Clojure functions.
 
-  * `table-atom` is an atom of a map. Keys are API call names
-    (typically keywords), and values are functions."
+  * `table-atom` is an atom of a map. Keys are keyword API call names
+    (typically keywords), and values are functions.
+
+  The router will accept string API call names in incoming messages and
+  automatically keywordize them, for JSON compatibility.
+"
   (:use [com.paullegato.bureaucrat.api-router]
         [slingshot.slingshot :only [try+ throw+]])
   (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
@@ -16,7 +20,7 @@
 
   IAPIRouter 
   (process-message! [component message]
-    (if-let [handler (handler-for-call component (:call message))]
+    (if-let [handler (handler-for-call component (keyword (:call message)))]
       (helpers/try-handler handler message)
       (do
         (log/warn "[bureaucrat][table-api-router] Couldn't find a valid API handler for message; discarding. Message was: " message)

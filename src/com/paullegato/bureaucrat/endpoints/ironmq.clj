@@ -310,6 +310,7 @@
                                  poller-batch-size ;; The listener poller will fetch messages in batches of this size.
                                  ])
 
+
 (extend IronMQ-EDN-Endpoint
   IQueueEndpoint iqueueendpoint-implementations
   IChannelEndpoint ichannelendpoint-implementations

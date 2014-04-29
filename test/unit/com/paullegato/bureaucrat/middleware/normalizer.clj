@@ -9,7 +9,7 @@
 
 (fact "normalize-ingress< accepts strings on the given channel and outputs normalized messages on the returned channel"
       (let [raw-in         (chan 1)
-            normalized-out (normalize-ingress< :test-endpoint raw-in)]
+            normalized-out (normalize-ingress< raw-in :test-endpoint)]
         (>!! raw-in "foo bar baz") => truthy
         (let [result (<!! normalized-out)]
           result => (contains {:payload "foo bar baz"})
@@ -18,8 +18,9 @@
 
 
 (fact "normalize-ingress> accepts strings on the returned channel and outputs normalized messages on the given channel"
-      (let [normalized-out (chan 1)
-            raw-in         (normalize-ingress> :test-endpoint normalized-out)]
+      (let [normalized-out (async/pipe (async/timeout 10000)
+                                       (chan 1))
+            raw-in         (normalize-ingress> normalized-out :test-endpoint)]
         (>!! raw-in "foo bar baz") => truthy
         (let [result (<!! normalized-out)]
           result => (contains {:payload "foo bar baz"})
@@ -30,7 +31,8 @@
 (fact "normalize-egress< accepts internal-format messages on the given
 channel and outputs interservice format messages on the returned channel"
       (let [internal-format-in         (chan 1)
-            interservice-out (normalize-egress< internal-format-in)]
+            interservice-out  (async/pipe (normalize-egress< internal-format-in)
+                                          (async/timeout 10000))]
         (>!! internal-format-in {:bureaucrat {:ingress-endpoint :test :ingress-time :test} :payload "asdf"}) => truthy
         (<!! interservice-out) => {:payload "asdf"}))
 

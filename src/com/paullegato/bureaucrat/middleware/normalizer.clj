@@ -48,8 +48,8 @@
 
   Adds the :bureaucrat key to the result."
   ([ingress-endpoint message]
-     (normalize message ingress-endpoint (time/now)))
-  ([ingress-endpoint message  ingress-time]
+     (normalize-ingress ingress-endpoint message (time/now)))
+  ([ingress-endpoint message ingress-time]
       (let [message (if (map? message)
                       message
                       {:payload message})]
@@ -67,7 +67,7 @@
   "Accepts arbitrary messages on the given channel, performs ingress
   normalization on them, and outputs the resulting strings to the
   returned channel."
-  [ingress-endpoint source-channel]
+  [source-channel ingress-endpoint]
   (map< (partial normalize-ingress ingress-endpoint) source-channel))
 
 
@@ -75,7 +75,7 @@
   "Accepts arbitrary messages on the returned channel, performs ingress
   normalization on them, and outputs the resulting strings to the
   given channel."
-  [ingress-endpoint source-channel]
+  [source-channel ingress-endpoint]
   (map> (partial normalize-ingress ingress-endpoint) source-channel))
 
 

@@ -4,6 +4,7 @@
             [com.paullegato.bureaucrat.transport  :as transport]
             [com.paullegato.bureaucrat.endpoint   :as endpoint]
             [com.paullegato.bureaucrat.util       :as util :refer [send-to-dlq!]]
+            [clojure.core.async :as async :refer [<! go-loop]]
             [onelog.core :as log]))
 
 (defn valid-api-message?
@@ -27,6 +28,7 @@
   If there are any errors, logs them and attempts to put the message
   on the DLQ."
   [f message]
+  (log/info "[bureaucrat][api-router] Got message: " message)
 
   (when-not (valid-api-message? message)
     (log/error "[bureaucrat][api-router] Rejecting invalid message: " message)
@@ -51,3 +53,15 @@
         ;; Forward a copy of the message to the dead letter queue, if possible:
         (send-to-dlq! message)))))
 
+
+(defn apply-router!
+  "Given a core.async channel that produces API messages, passes them
+  to the given IAPIRouter as they arrive.
+  TODO: Concurrency"
+  [source-channel router]
+  (go-loop [next-message (<! source-channel)]
+    (if-not next-message
+      (log/warn "[bureaucrat][API router] Source channel closed; exiting API router loop.")
+      (do
+        (api-router/process-message! router next-message)
+        (recur (<! source-channel))))))
