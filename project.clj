@@ -27,7 +27,7 @@
                  [environ "0.4.0"] ;; Read config values from env vars
 
                  [org.clojars.pjlegato/clansi   "1.3.0"] ;; ANSI colorization
-                 [org.clojars.pjlegato/lock-key "1.1.0-SNAPSHOT"] ;; Wrapper around Java cryptography extensions
+                 [org.clojars.pjlegato/lock-key "1.1.0"] ;; Wrapper around Java cryptography extensions
                  [environ "0.4.0"]  ;; Get config from environment
 
                  ;; IronMQ client
