@@ -14,10 +14,11 @@
   timeout ms long."
   ([fn] (spin-on fn 20 200))
   ([fn n timeout]
-     (Thread/sleep timeout)
-     (if (and (not (fn))
-              (> n 0))
-       (recur fn (- n 1) timeout))))
+     (when (not (fn))
+       (if (> n 0)
+         (do (Thread/sleep timeout)
+             (recur fn (- n 1) timeout))
+         (throw (Exception. "[bureaucrat][test-helpers] Spinlock timeout!"))))))
 
 
 (defn create-ironmq-test-queue!

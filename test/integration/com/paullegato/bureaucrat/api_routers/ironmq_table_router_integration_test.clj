@@ -24,21 +24,27 @@
 
             send-channel        (normalize-egress> (data/send-channel endpoint))
 
-            ;; Don't wait forever trying to receive; time out in 10 seconds in case of error
+            ;; Don't wait forever trying to receive; time out in case of error
             receive-channel     (-> (data/receive-channel endpoint)
                                     (normalizer/normalize-ingress< endpoint)
-                                    (async/pipe (async/timeout 10000)))
+                                    (async/pipe (async/timeout 60000)))
 
             test-payload        (str "IM/router integration test message -- " (rand 10000000))]
 
 
         (try
+          (endpoint/purge! endpoint)
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+
           (api-helpers/apply-router! receive-channel router)
 
           (>!! send-channel {:call :foo
                              :payload test-payload})
           ;; Await delivery
-          (spin-on #(= 0 (endpoint/count-messages endpoint)))
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+
+          ;; Await processing
+          (spin-on #(not (nil? @last-result)) 20 1000)
 
           ;; Success!
           @last-result => test-payload
@@ -46,7 +52,7 @@
           (finally (endpoint/unregister-listener! endpoint)))))
 
 
-(fact "API handlers forward unprocessable messaged to the dead letter queue"
+(fact "API handlers forward unprocessable messages to the dead letter queue"
       (let [last-result (atom nil)
             endpoint    (create-ironmq-test-queue! {:encoding :json})
             router      (table-api-router {:foo (fn [message]
@@ -66,6 +72,8 @@
 
         (endpoint/purge! dlq)
         (endpoint/purge! endpoint)
+        (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+        (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
 
         (try
           (api-helpers/apply-router! receive-channel router)
@@ -74,25 +82,24 @@
           (>!! send-channel {:call "forbidden-test-handler"
                              :payload test-payload})
           ;; ;; Await delivery
-          (spin-on #(= 0 (endpoint/count-messages endpoint)))
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
           @last-result => nil
           
           ;; ;; Make sure invalid API call went to the DLQ:
-          (spin-on #(< 0 (endpoint/count-messages endpoint)))
+          (spin-on #(< 0 (endpoint/count-messages endpoint)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
           (<!! dlq-channel) => (contains {:payload test-payload})
 
           ;; Try to send to a nonexistent function:
           (>!! send-channel {:call "nonexistent-test-handler"
                              :payload test-payload})
           ;; Await delivery
-          (spin-on #(= 0 (endpoint/count-messages endpoint)))
-          (spin-on #(= 0 (endpoint/count-messages dlq)))
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
           (<!! dlq-channel) => (contains {:payload test-payload})
 
           
-          ;; ;; ;; Make sure invalid API call went to the DLQ:
-          ;; (spin-on #(< 0 (endpoint/count-messages endpoint)))
-          ;; (endpoint/receive! dlq 10000) => (contains {:payload second-test-message})
+
           (finally
             (endpoint/unregister-listener! endpoint)
             (endpoint/unregister-listener! dlq)))))
