@@ -27,22 +27,28 @@
   [prefix]
 
   IAPIRouter 
-  (process-message! [component message] try-to-process-message)
+  (process-message! [component message] 
+    (try-to-process-message component message))
   
 
   (handler-for-call [component call]
-    (let [call (str prefix call)
+    (let [call (str prefix (-> (str call)
+                               (.substring 1)))
           fn   (resolve (symbol call))
           api-allowed? (:api (meta fn))]
       (if api-allowed?
         fn
         (do
-          (log/warn "[bureaucrat][metadata-api-router] Got a request for an invalid API call '" call "'!")
-          nil)))))
+          (log/warn "[bureaucrat][metadata-api-router] Got a request for an invalid API call '" call "', rejecting!")
+          nil))))
+
+  (process-unhandled-message! [component message]
+    (process-unhandled-message component message)))
 
 
 (defn metadata-api-router
   "Returns a new MetadataAPIRouter. The given prefix will be prepended
   to all API call namespace lookups."
   [prefix]
+  (log/debug "[bureaucrat] MetadataAPIRouter starting with prefix " prefix)
   (map->MetadataAPIRouter {:prefix (str prefix)}))

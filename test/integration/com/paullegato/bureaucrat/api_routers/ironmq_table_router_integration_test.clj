@@ -14,13 +14,14 @@
             [onelog.core :as log]))
 
 
-(fact "API handlers are called properly from IronMQ source queues"
-      (log/info "------------------------------ API handler test")
-      (let [last-result (atom nil)
-            router   (table-api-router {:foo (fn [message]
-                                               (log/info "allowed-test-handler got a message: " message)
-                                               (reset! last-result message))})
-            endpoint (create-ironmq-test-queue! {:encoding :json})
+(def router  (table-api-router {:foo (fn [message]
+                                       (log/info "allowed-test-handler got a message: " message)
+                                       (reset! last-result message))}))
+(def last-result (atom nil))
+
+(fact  "API handlers forward unprocessable messages to the dead letter queue"
+      (log/info "------------------------------ Unprocessable message forwarding test")
+      (let [endpoint (create-ironmq-test-queue! {:encoding :json})
             
 
             send-channel      (normalize-egress> (data/send-channel endpoint))
@@ -32,6 +33,7 @@
 
 
         (try
+          (reset! last-result nil)
           (api-helpers/apply-router! receive-channel router)
 
           (>!! send-channel {:call :foo
@@ -49,13 +51,9 @@
             (endpoint/unregister-listener! endpoint)))))
 
 
-(fact "API handlers forward unprocessable messages to the dead letter queue"
-      (log/info "------------------------------ Unprocessable message forwarding test")
-      (let [last-result (atom nil)
-            endpoint    (create-ironmq-test-queue! {:encoding :json})
-            router      (table-api-router {:foo (fn [message]
-                                                  (log/info "allowed-test-handler got a message: " message)
-                                                  (reset! last-result message))})
+(fact "API handlers are called properly from IronMQ source queues"
+      (log/info "------------------------------ API handler test")
+      (let [endpoint    (create-ironmq-test-queue! {:encoding :json})
 
             dlq          (transport/dead-letter-queue (:transport endpoint))
             dlq-channel  (data/receive-channel dlq)
@@ -70,7 +68,6 @@
             other-test-payload  (str "IM/router integration test message -- " (rand 10000000))]
 
         (try
-
           (endpoint/purge! dlq)
           (endpoint/purge! endpoint)
 
@@ -115,6 +112,5 @@
             ;; (async/close! receive-channel)
             (endpoint/unregister-listener! endpoint)
             (endpoint/unregister-listener! dlq)))))
-
 
 

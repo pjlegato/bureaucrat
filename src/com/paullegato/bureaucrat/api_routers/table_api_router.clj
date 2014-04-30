@@ -28,11 +28,7 @@
     (get @table-atom call))
 
   (process-unhandled-message! [component message]
-    (if-let [f (:unhandled-message-fn component)]
-      (f component message)
-      (do
-        (log/warn "[bureaucrat][table-api-router] Couldn't find a valid API handler for call '" (:call message) "'; discarding.\nMessage was: " message)
-        (send-to-dlq! message))))
+    (process-unhandled-message component message))
 
   IAdjustableAPIRouter
   (add-handler! [component api-call function]
