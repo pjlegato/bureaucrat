@@ -69,7 +69,10 @@
 
   (handler-for-call [component call]
     "Returns the handler function that would be used for the given API
-    call."))
+    call.")
+
+  (process-unhandled-message! [component message]
+    "Called by default if handler-for-call returns nil for a given call.")  )
 
 
 (defprotocol IAdjustableAPIRouter

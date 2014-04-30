@@ -1,6 +1,7 @@
 (ns com.paullegato.bureaucrat.middleware.edn
   "Middleware to perform EDN transformations on core.async messages."
   (:require [clojure.core.async :as async :refer [map> map<]]
+            [onelog.core :as log]
             [clojure.tools.reader.edn :as edn]))
 
 
@@ -18,16 +19,23 @@
   (map> pr-str target-channel))
 
 
+(defn try-to-read-string
+  [string]
+  (try
+    (edn/read-string string)
+    (catch Throwable t
+      (log/error "[bureaucrat][edn] Couldn't decode unreadable string: " string "\n" (log/throwable t)))))
+
 (defn edn-decode<
   "Reads strings from the given source channel, EDN decodes them,
    and outputs them to the returned channel."
   [source-channel]
-  (map< edn/read-string source-channel))
+  (map< try-to-read-string source-channel))
 
 
 (defn edn-decode>
   "Returns a new channel that accepts strings, EDN decodes them,
    and outputs them to the given target channel."
   [target-channel]
-  (map> edn/read-string target-channel))
+  (map> try-to-read-string target-channel))
 

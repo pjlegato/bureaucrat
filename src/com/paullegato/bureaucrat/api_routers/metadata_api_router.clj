@@ -15,11 +15,11 @@
    \"some-function\" and \"other-function\" as their calls. (Don't
    forget the trailing slash!)
 "
-  (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
-            [com.paullegato.bureaucrat.endpoint :as endpoint]
+  (:require [com.paullegato.bureaucrat.endpoint :as endpoint]
             [onelog.core :as log])
-  (:use [com.paullegato.bureaucrat.api-router]
 
+  (:use [com.paullegato.bureaucrat.api-router]
+        [com.paullegato.bureaucrat.api-routers.api-router-helpers]
         [slingshot.slingshot :only [try+ throw+]]))
 
 
@@ -27,10 +27,7 @@
   [prefix]
 
   IAPIRouter 
-
-  (process-message! [component message]
-    (if-let [handler (handler-for-call component (:call message))]
-      (helpers/try-handler handler message)))
+  (process-message! [component message] try-to-process-message)
   
 
   (handler-for-call [component call]

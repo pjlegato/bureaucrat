@@ -5,7 +5,9 @@
             [com.paullegato.bureaucrat.endpoint   :as endpoint]
             [com.paullegato.bureaucrat.util       :as util :refer [send-to-dlq!]]
             [clojure.core.async :as async :refer [<! go-loop]]
+            [com.paullegato.bureaucrat.api-router :refer [handler-for-call]]
             [onelog.core :as log]))
+
 
 (defn valid-api-message?
   "Inspects the given message and returns whether it is a valid
@@ -54,6 +56,17 @@
         (send-to-dlq! message)))))
 
 
+(defn try-to-process-message 
+  "Shared implementation for IAPIRouter's `process-message!` call. Tries
+  to look up the appropriate handler using `handler-for-call`. If found,
+  runs the handler."
+  [component message]
+    (if-let [handler (handler-for-call component (keyword (:call message)))]
+      (do (log/info "[bureaucrat][api-helpers] Looking up handler for call: " (:call message) ". Message is: " message)
+          (try-handler handler message))
+      (api-router/process-unhandled-message! component message)))
+
+
 (defn apply-router!
   "Given a core.async channel that produces API messages, passes them
   to the given IAPIRouter as they arrive.
@@ -61,7 +74,9 @@
   [source-channel router]
   (go-loop [next-message (<! source-channel)]
     (if-not next-message
-      (log/warn "[bureaucrat][API router] Source channel closed; exiting API router loop.")
+      (log/warn "[bureaucrat][API router] Source channel closed; exiting API router loop for router " router)
       (do
         (api-router/process-message! router next-message)
         (recur (<! source-channel))))))
+
+

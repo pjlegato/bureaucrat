@@ -364,22 +364,41 @@ user> (endpoint/count-messages queue)
 ## Security
 Security is handled at the transport layer, and not by Bureaucrat. Any
 message that gets into an incoming message queue will be processed by
-Bureaucrat, no questions asked. It is up to you to ensure that bad
-actors cannot access your queues.
+Bureaucrat, no questions asked. It is up to your application to ensure
+that bad actors cannot access your queues, or to preprocess your
+messages somehow to ensure that only authorized users can do things.
+
+## Garbage collector performance note
+
+The default JVM garbage collector is a "stop the world" type
+collector. This means that when your JVM is close to running out of
+memory, it will pause your program's execution to perform a
+collection. The length of the pause depends on how much memory you've
+used; it can range from seconds to minutes for a very large program.
+
+This is generally highly undesirable with server software. It can
+cause noticeable lags in execution that cascade to other systems which
+timeout while waiting for an async reply. I recommend running
+Bureaucrat with a different GC mode that doesn't stop the world for so long.
+
+For example, you can add something like the following to your
+`project.clj`. You may want to tweak the 512MB of memory as your app
+requires.
+
+````
+  :jvm-opts ["-d64" "-Duser.timezone=GMT" "-server" "-Djava.awt.headless=true" "-Dfile.encoding=utf-8"
+             "-Xmx512m" "-Xms512m" 
+             "-XX:+UseConcMarkSweepGC" "-XX:+CMSIncrementalMode"
+```
 
 ## Roadmap
-* Use core.async as an in-process message transport
+* HTTP transport
+* HornetQ
 * Amazon SQS
 * Provide additional canned enterprise messaging widgets for routing
   and transformation beyond the API router.
 
 ## Component / Lifecycle Architecture
-
-Bureaucrat's backend message queue adapters are implemented as
-components within Stuart Sierra's
-["Component"](https://github.com/stuartsierra/component) software
-component lifecycle management framework. The use of this framework in
-your code is entirely optional; Bureaucrat will work fine without it.
 
 Each Bureaucrat component provides a constructor that returns an uninitialized
 component as well as a convenience method that returns an initialized

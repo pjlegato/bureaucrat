@@ -86,7 +86,7 @@
 
 
 ;; How long to sleep between poll cycles, in ms
-(def poll-sleep-time 1000)
+(def poll-sleep-time 500)
 
 
 (defn- milli-time
@@ -108,8 +108,11 @@
 
 
 (def iqueueendpoint-implementations
-  {:transport (fn ([component] (:transport component))),
-   :purge! (fn ([component] (.clear (:queue component)))),
+  {
+   :transport (fn ([component] (:transport component)))
+
+   :purge! (fn ([component] (.clear (:queue component))))
+
    :unregister-listener!
    (fn
      ([component]
@@ -117,64 +120,43 @@
         (when-let
             [pool (registered-listener component)]
           (cp/shutdown pool)
-          (swap! (:iron-cache component) dissoc :pool)))),
+          (swap! (:iron-cache component) dissoc :pool))))
+
+
    :registered-listener
-   (fn ([component] (:pool @(:iron-cache component)))),
-   :register-listener!
-   (fn
-     ([component handler-fn concurrency]
-        (unregister-listener! component)
-        (swap! (:iron-cache component) assoc :should-halt false)
-        (let
-            [pool
-             (or
-              (:pool (:iron-cache component))
-              (let
-                  [pool (cp/threadpool (+ 1 concurrency) :daemon true)]
-                (:pool (swap! (:iron-cache component) assoc :pool pool))))]
-          (cp/future
-            pool
-            (let
-                [messages
-                 (receive-batch!
-                  component
-                  (or (:poller-batch-size component) 20))
-                 message-count
-                 (count messages)]
-              (if
-                  (> message-count 0)
-                (log/info
-                 "[bureaucrat][ironmq] Background message poller got "
-                 message-count
-                 " messages."))
-              (doall
-               (cp/pmap
-                pool
-                (fn
-                  [message]
-                  (log/info
-                   "[bureaucrat][ironmq] Background poller got a message, processing it. Message is "
-                   message)
-                  (try
-                    (handler-fn message)
-                    (catch
-                        Throwable
-                        t
-                      (log/error
-                       "[bureaucrat/ironmq] Async listener: error processing message "
-                       message
-                       " - "
-                       (log/throwable t))
-                      (send!
-                       (transport/dead-letter-queue (:transport component))
-                       message))))
-                messages)))
-            (Thread/sleep 2000)
-            (if
-                (:should-halt @(:iron-cache component))
-              (log/info
-               "[bureaucrat][ironmq] Background poller got halt notice, stopping.")
-              (recur)))))),
+   (fn ([component] (:pool @(:iron-cache component))))
+
+
+   :register-listener!   (fn [component handler-fn concurrency]
+                           (unregister-listener! component)
+                           (swap! (:iron-cache component) assoc :should-halt false)
+                           (let
+                               [pool (or (:pool (:iron-cache component))
+                                         (let [pool (cp/threadpool (+ 1 concurrency) :daemon true)]
+                                           (:pool (swap! (:iron-cache component) assoc :pool pool))))]
+                             (cp/future  pool
+                               (let
+                                   [messages      (receive-batch! component (or (:poller-batch-size component) 20))
+                                    message-count (count messages)]
+                                 (when (> message-count 0)
+                                   (log/info "[bureaucrat][ironmq::" (:name component) "] Background message poller got "  message-count " messages.")
+                                   (doall (cp/pmap pool
+                                                   (fn [message]
+                                                     (log/debug "[bureaucrat][ironmq::" (:name component) "] Background poller processing message: " message)
+                                                     (try
+                                                       (handler-fn message)
+                                                       (log/debug "[bureaucrat][ironmq::" (:name component) "] Background poller finished processing message: " message)
+                                                       (catch Throwable t
+                                                         (log/error "[bureaucrat/ironmq::" (:name component) "] Background poller: error processing message " message
+                                                                    " - " (log/throwable t))
+                                                         (util/send-to-dlq! message))))
+                                                   messages))))
+                               (Thread/sleep poll-sleep-time)
+                               (if
+                                   (:should-halt @(:iron-cache component))
+                                 (log/info "[bureaucrat][ironmq::" (:name component) "] Background poller got halt notice, stopping.")
+                                 (recur)))))
+
 
    :count-messages   (fn [component]
                        (get
@@ -184,40 +166,42 @@
                          (str "/queues/" (:name component)))
                         "size"))
 
-   :receive-batch!
-   (fn
-     ([component size]
-        (let
-            [queue
-             (:queue component)
-             messages
-             (.getMessages (.get queue size))]
-          (doall
-           (pmap
-            (fn [message] (.deleteMessage queue message) (str message))
-            messages))))),
-   :receive!
-   (fn
-        ([component timeout]
-             ;; blocks for timeout ms
-             (let [wait-until (+ timeout (milli-time))
-                   queue (:queue component)]
-               (loop []
-                 (if-let [message (try-to-get-message queue)]
-                   (str message)
-                   (when (>= wait-until (milli-time))
-                     (Thread/sleep poll-sleep-time) ;; don't hammer the server
-                     (recur))))))
+   :receive-batch!   (fn
+                       ([component size]
+                          (let
+                              [queue
+                               (:queue component)
+                               messages
+                               (.getMessages (.get queue size))]
+                            (doall
+                             (pmap
+                              (fn [message] (.deleteMessage queue message) (str message))
+                              messages)))))
 
-     ([component]
-        (let
-            [queue (:queue component)]
-          (loop
-              []
-            (if-let
-                [message (try-to-get-message queue)]
-              (str message)
-              (do (Thread/sleep poll-sleep-time) (recur))))))),
+
+   :receive!   (fn
+                 ([component timeout]
+                    ;; blocks for timeout ms
+                    (let [wait-until (+ timeout (milli-time))
+                          queue (:queue component)]
+                      (loop []
+                        (if-let [message (try-to-get-message queue)]
+                          (str message)
+                          (when (>= wait-until (milli-time))
+                            (Thread/sleep poll-sleep-time) ;; don't hammer the server
+                            (recur))))))
+
+                 ([component]
+                    (let
+                        [queue (:queue component)]
+                      (loop
+                          []
+                        (if-let
+                            [message (try-to-get-message queue)]
+                          (str message)
+                          (do (Thread/sleep poll-sleep-time) (recur)))))))
+
+
    :send! (fn ([component message]
                  (send! component message nil))
             ([component message options]
@@ -225,7 +209,7 @@
                ;; IronMQ requires timeouts in seconds, not milliseconds.
                ;; ttls will be rounded up to the next second.
                (if-not message
-                 (log/error "send! got a nil message; ignoring it.")
+                 (log/error "[bureaucrat][ironmq::" (:name component) "] send! got a nil message; ignoring it.") 
                  (let [ttl (:ttl options)
                        queue ^Queue (:queue component)
 
@@ -234,9 +218,9 @@
                        message (if (string? message)
                                  message
                                  (do
-                                   (log/warn "[bureaucrat] IronMQ endpoint " (:name component) ": send! got a non-string message; coercing it to a string. You should arrange for all messages to be strings!")
+                                   (log/warn "[bureaucrat][ironmq::" (:name component) "] send! got a non-string message; coercing it to a string. You should arrange for all messages to be strings!")
                                    (pr-str message)))]
-                   (log/debug "[bureaucrat] IronMQ endpoint sending message: " message)
+                   (log/debug "[bureaucrat][ironmq::" (:name component) "] Sending message: " message)
                    (if (or (nil? ttl)
                            (< ttl 1))
                      (.push queue message)
@@ -251,7 +235,7 @@
 
 
 (def ichannelendpoint-implementations
-    {:dequeue-channel (fn ([component] (endpoint< component))),
+    {:dequeue-channel (fn ([component] (endpoint< component)))
      :enqueue-channel (fn ([component] (endpoint> component)))})
 
 
@@ -349,7 +333,7 @@
 
 
 (defn ironmq-edn-endpoint
-  "Constructor for IronMQ JSON-transcoded queue endpoints. Note that
+  "Constructor for IronMQ EDN-transcoded queue endpoints. Note that
   this does not create anything in the backend; it just wraps the
   Clojure access points to the backend.
 
@@ -357,9 +341,9 @@
   rather than calling this directly!" 
   [name transport]
   (map->IronMQ-EDN-Endpoint {:name name
-                              :queue (.queue ^Client (:client transport) name)
-                              :transport transport
-                              :poller-batch-size 100
-                              :iron-cache (atom {})}))
+                             :queue (.queue ^Client (:client transport) name)
+                             :transport transport
+                             :poller-batch-size 100
+                             :iron-cache (atom {})}))
 
 

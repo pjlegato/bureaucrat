@@ -43,7 +43,8 @@
         (case encoding
           :json (endpoint/ironmq-json-endpoint name component)
           :edn  (endpoint/ironmq-edn-endpoint name component)
-          (endpoint/ironmq-endpoint name component)))))
+          (do (log/warn "[bureaucrat][ironmq-transport] You didn't specify either :edn or :json encoding when creating an endpoint -- this is probably not what you want! IronMQ can natively handle only strings.")
+              (endpoint/ironmq-endpoint name component))))))
 
 
   (lookup [component queue-name]

@@ -3,6 +3,10 @@
   :url "https://github.com/pjlegato/bureaucrat/"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :jvm-opts ["-d64" "-Duser.timezone=GMT" "-server" "-Djava.awt.headless=true" "-Dfile.encoding=utf-8"
+             "-Xmx1024m" "-Xms1024m" 
+             "-XX:+UseConcMarkSweepGC" "-XX:+CMSIncrementalMode" "-XX:+PrintGCDetails" "-XX:+PrintGCTimeStamps"
+             ]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  
                  ;; Codecs

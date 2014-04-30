@@ -1,8 +1,10 @@
 (ns com.paullegato.bureaucrat.util
   "General utility functions."
     (:require [com.paullegato.bureaucrat.transport  :as transport]
+              [com.paullegato.bureaucrat.endpoint   :as endpoint]
+              [com.paullegato.bureaucrat.data-endpoint   :as data-endpoint]
               [com.paullegato.bureaucrat.middleware.normalizer :as normalizer :refer [normalize-egress>]]
-              [com.paullegato.bureaucrat.data-endpoint :as data-endpoint]
+
               [clojure.core.async :as async :refer [put!]]
               [onelog.core :as log]))
 
@@ -14,15 +16,15 @@
    move to general utils file."
   [message]
   (log/warn "[bureaucrat][dlq] Sending message to dead letter queue: " message)
-  (if-let [send-channel (some-> message
-                                :bureaucrat
-                                :ingress-endpoint
-                                :transport
-                                transport/dead-letter-queue
-                                data-endpoint/send-channel
-                                normalize-egress>)]
+  (if-let [dlq (some-> message
+                       :bureaucrat
+                       :ingress-endpoint
+                       :transport
+                       transport/dead-letter-queue
+                       data-endpoint/send-channel
+                       normalize-egress>)]
     (try
-      (put! send-channel message)
+      (put! dlq message)
       (catch Throwable t
         (log/error "[bureaucrat][api-router] Exception trying to send a message to the dead letter queue! Exception was: "
                    (log/throwable t)

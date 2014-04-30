@@ -12,7 +12,7 @@
    channel. `endpoint<` takes messages from the channel and places
    them on the endpoint."
   (:require [com.paullegato.bureaucrat.endpoint :as queue :refer [register-listener! unregister-listener! send!]]
-            [clojure.core.async :as async :refer [<! >! put! go go-loop chan]]
+            [clojure.core.async :as async :refer [<! >! >!! put! go go-loop chan]]
             [onelog.core :as log]))
 
 
@@ -31,6 +31,7 @@
   (dequeue-channel [component] "Returns a core.async channel where messages received on the underlying endpoint will be placed."))
 
 
+;; To be used in implementations:
 (defn endpoint<
   "Given a source IQueueEndpoint, creates a core.async channel and
   connects them so that messages received on the IQueueEndpoint are
@@ -46,13 +47,14 @@
   ([endpoint] (endpoint< endpoint 4))
   ([endpoint concurrency]
      (let [channel (chan)]
+       (log/debug "[bureaucrat][channel-connector/endpoint<::" (:name endpoint) "] Registering a channel endpoint.")
        (register-listener! endpoint
                            (fn [message]
-                             (log/debug "[bureaucrat] async-connector/endpoint> got message " message ", dispatching to channel")
-                             (when-not (put! channel message)
-                               (log/error "[bureaucrat] async-connector/endpoint>: unregistering my listener function because my core.async channel has been closed! Was processing message: " message)
+                             (log/debug "[bureaucrat][channel-connector/endpoint>::" (:name endpoint) "] got message " message ", dispatching to channel")
+                             (when-not (>!! channel message)
+                               (log/error "[bureaucrat][channel-connector/endpoint>::" (:name endpoint) "]: unregistering listener function from endpoint because my core.async channel has been closed! Was processing message: " message)
                                (unregister-listener! endpoint)
-                               (throw (Exception. "[bureaucrat] async-connector/endpoint>'s core.async channel was closed"))))
+                               (throw (Exception. (str "[bureaucrat][channel-connector/endpoint>:: " (:name endpoint) "]'s core.async channel was closed")))))
                            concurrency)
        channel)))
 
@@ -66,15 +68,16 @@
   Send-options will be supplied to Bureaucrat's send! function. This
   can be used to e.g. supply a ttl for the messages."
   ([endpoint & send-options]
+       (log/debug "[bureaucrat][channel-connector/endpoint>] Registering a channel endpoint on " (:name endpoint))
      (let [channel (chan)]
        (go-loop []
          ;; Take returns nil when the channel is closed. In that case,
          ;; we exit the go loop rather than recurring.
          (if-let [message (<! channel)]
-           (do  (log/debug "[bureaucrat] async-connector/endpoint<  got message " message ", dispatching to endpoint")
-                (future (send! endpoint message send-options))
+           (do  (log/debug "[bureaucrat][channel-connector/endpoint<::" (:name endpoint) "]  got message " message ", dispatching to endpoint " (:name endpoint) )
+                (send! endpoint message send-options)
                 (recur))
-           (log/warn "[bureaucrat] async-connector/endpoint<: exiting the go-loop because my source channel was closed.")))
+           (log/warn "[bureaucrat][channel-connector/endpoint<]: exiting the go-loop for endpoint " (:name endpoint) " because my source channel was closed.")))
        channel)))
 
 

@@ -9,12 +9,13 @@
             [com.paullegato.bureaucrat.transport  :as transport]
             [com.paullegato.bureaucrat.middleware.normalizer :as normalizer :refer [normalize-egress> normalize-ingress<]]
             [com.paullegato.bureaucrat.data-endpoint    :as data]
-            [clojure.core.async :as async :refer [>!! <!!]]
+            [clojure.core.async :as async :refer [>!! <!! alt!!]]
             [com.paullegato.bureaucrat.api-routers.api-router-helpers :as api-helpers]
             [onelog.core :as log]))
 
 
 (fact "API handlers are called properly from IronMQ source queues"
+      (log/info "------------------------------ API handler test")
       (let [last-result (atom nil)
             router   (table-api-router {:foo (fn [message]
                                                (log/info "allowed-test-handler got a message: " message)
@@ -22,20 +23,15 @@
             endpoint (create-ironmq-test-queue! {:encoding :json})
             
 
-            send-channel        (normalize-egress> (data/send-channel endpoint))
+            send-channel      (normalize-egress> (data/send-channel endpoint))
 
-            ;; Don't wait forever trying to receive; time out in case of error
-            receive-channel     (-> (data/receive-channel endpoint)
-                                    (normalizer/normalize-ingress< endpoint)
-                                    (async/pipe (async/timeout 60000)))
-
-            test-payload        (str "IM/router integration test message -- " (rand 10000000))]
+            ;; Don't wait forever trying to receive; time out in 10 seconds in case of error
+            receive-channel   (-> (data/receive-channel endpoint)
+                                  (normalizer/normalize-ingress< endpoint))
+            test-payload      (str "IM/router integration test message -- " (rand 10000000))]
 
 
         (try
-          (endpoint/purge! endpoint)
-          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
-
           (api-helpers/apply-router! receive-channel router)
 
           (>!! send-channel {:call :foo
@@ -49,59 +45,76 @@
           ;; Success!
           @last-result => test-payload
 
-          (finally (endpoint/unregister-listener! endpoint)))))
+          (finally 
+            (endpoint/unregister-listener! endpoint)))))
 
 
 (fact "API handlers forward unprocessable messages to the dead letter queue"
+      (log/info "------------------------------ Unprocessable message forwarding test")
       (let [last-result (atom nil)
             endpoint    (create-ironmq-test-queue! {:encoding :json})
             router      (table-api-router {:foo (fn [message]
                                                   (log/info "allowed-test-handler got a message: " message)
                                                   (reset! last-result message))})
+
             dlq          (transport/dead-letter-queue (:transport endpoint))
-            dlq-channel  (async/pipe (data/receive-channel dlq)
-                                     (async/timeout 90000))
+            dlq-channel  (data/receive-channel dlq)
+
+
             send-channel        (normalize-egress> (data/send-channel endpoint))
 
-            ;; Don't wait forever trying to receive; time out in case of error
-            receive-channel     (-> (data/receive-channel endpoint)
-                                    (normalizer/normalize-ingress< endpoint)
-                                    (async/pipe (async/timeout 90000)))
+            receive-channel (-> (data/receive-channel endpoint)
+                                (normalizer/normalize-ingress< endpoint))
 
-            test-payload        (str "IM/router integration test message -- " (rand 10000000))]
-
-        (endpoint/purge! dlq)
-        (endpoint/purge! endpoint)
-        (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
-        (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
+            test-payload        (str "IM/router integration test message -- " (rand 10000000))
+            other-test-payload  (str "IM/router integration test message -- " (rand 10000000))]
 
         (try
+
+          (endpoint/purge! dlq)
+          (endpoint/purge! endpoint)
+
           (api-helpers/apply-router! receive-channel router)
 
-          ;; ;; try to send to a forbidden function:
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          ;;
+          ;; Try to send to a forbidden function:
+          ;;
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
           (>!! send-channel {:call "forbidden-test-handler"
                              :payload test-payload})
-          ;; ;; Await delivery
-          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
-          @last-result => nil
           
-          ;; ;; Make sure invalid API call went to the DLQ:
-          (spin-on #(< 0 (endpoint/count-messages endpoint)) 20 1000)
+          ;; Make sure invalid API call went to the DLQ:
+          (Thread/sleep 500)
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+          (Thread/sleep 500)
           (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
-          (<!! dlq-channel) => (contains {:payload test-payload})
 
+          (<!!-timeout dlq-channel 20000) => (contains {:payload test-payload})
+
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          ;;
           ;; Try to send to a nonexistent function:
-          (>!! send-channel {:call "nonexistent-test-handler"
-                             :payload test-payload})
-          ;; Await delivery
-          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
-          (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
-          (<!! dlq-channel) => (contains {:payload test-payload})
+          ;;
+          ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-          
+          (>!! send-channel {:call "nonexistent-test-handler"
+                             :payload other-test-payload})
+
+          ;; Await delivery from remote DLQ:
+          (Thread/sleep 500)
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+          (Thread/sleep 500)
+          (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
+
+          (<!!-timeout dlq-channel 20000) => (contains {:payload other-test-payload})
 
           (finally
+            ;; (async/close! dlq-channel)
+            ;; (async/close! send-channel)
+            ;; (async/close! receive-channel)
             (endpoint/unregister-listener! endpoint)
             (endpoint/unregister-listener! dlq)))))
+
 
 

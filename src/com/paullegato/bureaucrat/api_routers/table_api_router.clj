@@ -9,9 +9,11 @@
   automatically keywordize them, for JSON compatibility.
 "
   (:use [com.paullegato.bureaucrat.api-router]
+        [com.paullegato.bureaucrat.api-routers.api-router-helpers]
+        [com.paullegato.bureaucrat.util       :as util :refer [send-to-dlq!]]
+        [onelog.core :as log]
         [slingshot.slingshot :only [try+ throw+]])
-  (:require [com.paullegato.bureaucrat.api-routers.api-router-helpers :as helpers]
-            [com.paullegato.bureaucrat.util :refer [send-to-dlq!]]
+  (:require [com.paullegato.bureaucrat.util :refer [send-to-dlq!]]
             [onelog.core :as log]))
 
 
@@ -20,15 +22,17 @@
 
   IAPIRouter 
   (process-message! [component message]
-    (if-let [handler (handler-for-call component (keyword (:call message)))]
-      (helpers/try-handler handler message)
-      (do
-        (log/warn "[bureaucrat][table-api-router] Couldn't find a valid API handler for message; discarding. Message was: " message)
-        (send-to-dlq! message))))
+    (try-to-process-message component message))
 
   (handler-for-call [component call]
     (get @table-atom call))
 
+  (process-unhandled-message! [component message]
+    (if-let [f (:unhandled-message-fn component)]
+      (f component message)
+      (do
+        (log/warn "[bureaucrat][table-api-router] Couldn't find a valid API handler for call '" (:call message) "'; discarding.\nMessage was: " message)
+        (send-to-dlq! message))))
 
   IAdjustableAPIRouter
   (add-handler! [component api-call function]
@@ -45,4 +49,5 @@
 (defn table-api-router
   "Returns a new TableAPIRouter with the given initial routes."
   [initial-routes]
-  (map->TableAPIRouter {:table-atom (atom initial-routes)}))
+    (log/debug "[bureaucrat] TableAPIRouter starting with initial-routes " initial-routes)
+    (map->TableAPIRouter {:table-atom (atom initial-routes)}))
