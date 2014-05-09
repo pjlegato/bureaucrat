@@ -45,3 +45,11 @@ channel and outputs interservice format messages on the given channel"
         (<!! interservice-out) => {:payload "asdf"}))
 
 
+(fact "normalize-egress> doesn't mangle non-internal format messages"
+      (let [message "foo bar baz"
+            interservice-out   (chan 1)
+            internal-format-in (normalize-egress> interservice-out)]
+        (>!! internal-format-in message) => truthy
+        (<!! interservice-out) => message))
+
+

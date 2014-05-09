@@ -1,7 +1,6 @@
 (ns helpers.bureaucrat.test-helpers
   "Utility functions for use in tests."
-  (:require [immutant.messaging  :as mq]
-            [onelog.core :as log]
+  (:require [onelog.core :as log]
             [midje.repl]
             [com.paullegato.bureaucrat.transports.ironmq :as ironmq-transport]
 
@@ -61,7 +60,14 @@
   finished executing yet."
   [ms & body]
   `(let [f# (future ~@body)]
-     (.get ^java.util.concurrent.Future f# ~ms java.util.concurrent.TimeUnit/MILLISECONDS)))
+     (try
+       (.get ^java.util.concurrent.Future f# ~ms java.util.concurrent.TimeUnit/MILLISECONDS)
+       (catch java.util.concurrent.TimeoutException t#
+         ;; Re-throw another exception with a more helpful message containing
+         ;; the code that timed out, wrapping the original exception.
+         (throw (RuntimeException.
+                 (str "Timed out while waiting up to " ~ms " ms for the following code to run: " '~@body)
+                 t#))))))
 
 
 (defn repeatedly-run-tests
@@ -75,11 +81,13 @@
          (log/info "Test result: " runtime)))))
 
 
-(defn <!!-timeout
-  "Like <!!, but times out after the given number of ms."
+(defmacro <!!-timeout
+  "Like <!!, but times out after the given number of ms while trying to
+  read from port."
   [port ms]
-  (let [timeout-port  (async/timeout ms)
-        [val port] (alts!! [port timeout-port])]
-    (if (= port timeout-port)
-      (log/warn "[bureaucrat] <<!!-timeout timed out!"))
-    val))
+  `(let [timeout-port#  (async/timeout ~ms)
+         [val# port#]   (alts!! [~port timeout-port#])]
+    (if (= port# timeout-port#)
+      (log/warn+ (log/color [:bright :yellow]
+                            "<!!-timeout timed out while trying to read " '~port "!")))
+    val#))

@@ -76,7 +76,7 @@
 
             [clojure.core.async :as async :refer [map> map<]]
 
-            [com.paullegato.bureaucrat.util :as util]
+            [com.paullegato.bureaucrat.util :as util :refer [milli-time]]
 
             [com.paullegato.bureaucrat.transport :as transport]
             [com.paullegato.bureaucrat.channel-endpoint :as channel-endpoint :refer [IChannelEndpoint endpoint< endpoint>]]
@@ -87,12 +87,6 @@
 
 ;; How long to sleep between poll cycles, in ms
 (def poll-sleep-time 500)
-
-
-(defn- milli-time
-  "Returns System/nanoTime converted to milliseconds."
-  []
-  (long (/ (System/nanoTime) 1000000)))
 
 
 (defn try-to-get-message
@@ -119,7 +113,7 @@
         (swap! (:iron-cache component) assoc :should-halt true)
         (when-let
             [pool (registered-listener component)]
-          (cp/shutdown pool)
+          (cp/shutdown! pool)
           (swap! (:iron-cache component) dissoc :pool))))
 
 
@@ -149,7 +143,7 @@
                                                        (catch Throwable t
                                                          (log/error "[bureaucrat/ironmq::" (:name component) "] Background poller: error processing message " message
                                                                     " - " (log/throwable t))
-                                                         (util/send-to-dlq! message))))
+                                                         (util/send-to-dlq! (:transport component) message))))
                                                    messages))))
                                (Thread/sleep poll-sleep-time)
                                (if
@@ -218,7 +212,9 @@
                        message (if (string? message)
                                  message
                                  (do
-                                   (log/warn "[bureaucrat][ironmq::" (:name component) "] send! got a non-string message; coercing it to a string. You should arrange for all messages to be strings!")
+                                   (log/warn "[bureaucrat][ironmq::" (:name component)
+                                             "] send! got a non-string message; coercing it to a string. "
+                                             "You should arrange for all messages to be strings with middleware instead.")
                                    (pr-str message)))]
                    (log/debug "[bureaucrat][ironmq::" (:name component) "] Sending message: " message)
                    (if (or (nil? ttl)

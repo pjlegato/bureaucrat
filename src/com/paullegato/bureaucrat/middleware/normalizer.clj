@@ -39,6 +39,7 @@
   while others do.
 "
   (:require [clj-time.core :as time]
+            [onelog.core :as log]
             [clojure.core.async :as async :refer [map> map<]]))
 
 
@@ -50,17 +51,21 @@
   ([ingress-endpoint message]
      (normalize-ingress ingress-endpoint message (time/now)))
   ([ingress-endpoint message ingress-time]
-      (let [message (if (map? message)
-                      message
-                      {:payload message})]
-        (assoc message :bureaucrat {:ingress-endpoint ingress-endpoint
-                                    :ingress-time ingress-time}))))
+     (log/trace "[bureaucrat][normalizer] Normalizing the ingress of message: " message)
+     (let [message (if (map? message)
+                     message
+                     {:payload message})]
+       (assoc message :bureaucrat {:ingress-endpoint ingress-endpoint
+                                   :ingress-time ingress-time}))))
 
 
 (defn- normalize-egress
-  "Strips the :bureaucrat key from the given message map."
+  "Strips the :bureaucrat key from the given message if it is a map."
   [message]
-  (dissoc message :bureaucrat))
+  (log/debug "[bureaucrat][normalizer] Normalizing the egress of message: " message)
+  (if (map? message)
+    (dissoc message :bureaucrat)
+    message))
 
 
 (defn normalize-ingress<
@@ -75,8 +80,8 @@
   "Accepts arbitrary messages on the returned channel, performs ingress
   normalization on them, and outputs the resulting strings to the
   given channel."
-  [source-channel ingress-endpoint]
-  (map> (partial normalize-ingress ingress-endpoint) source-channel))
+  [out-channel ingress-endpoint]
+  (map> (partial normalize-ingress ingress-endpoint) out-channel))
 
 
 (defn normalize-egress<
@@ -91,5 +96,5 @@
   "Accepts arbitrary messages on the returned channel, performs egress
   normalization on them, and outputs the resulting strings to the
   given channel."
-  [source-channel]
-  (map> normalize-egress source-channel))
+  [out-channel]
+  (map> normalize-egress out-channel))

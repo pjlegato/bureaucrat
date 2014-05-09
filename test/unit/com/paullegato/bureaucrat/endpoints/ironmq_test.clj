@@ -43,17 +43,25 @@
 (fact "messages are purged properly"
       (let [endpoint @endpoint
             test-message "foo"]
+        (queue/purge! endpoint)
+        ;; Await processing by IronMQ
+        (spin-on #(= 0 (queue/count-messages endpoint)) 10 1000)
+
         (queue/send! endpoint test-message {:ttl 100000})
         (queue/send! endpoint test-message {:ttl 100000})
         (queue/send! endpoint test-message {:ttl 100000})
         (queue/send! endpoint test-message {:ttl 100000})
-        (queue/count-messages endpoint) => 4
+
+        ;; Await processing by IronMQ
+        (spin-on #(= 4 (queue/count-messages endpoint)) 10 1000)
+
 
         (queue/purge! endpoint)
 
         ;; Await processing by IronMQ
         (spin-on #(= 0 (queue/count-messages endpoint)) 10 1000)
 
+        ;; add to test results
         (queue/count-messages endpoint) => 0))
 
 
