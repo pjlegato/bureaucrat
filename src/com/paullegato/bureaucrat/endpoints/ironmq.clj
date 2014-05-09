@@ -122,12 +122,20 @@
 
 
    :register-listener!   (fn [component handler-fn concurrency]
+                           ;; Clear any old listener that may be around:
                            (unregister-listener! component)
+
+                           ;; IronMQ requires us to poll or expose a webhook endpoint. For now, we poll.
+                           ;; Flag to halt the poll loop:
                            (swap! (:iron-cache component) assoc :should-halt false)
+
                            (let
+                               ;; Threadpool to run the poll loop and process messages as they come in:
                                [pool (or (:pool (:iron-cache component))
                                          (let [pool (cp/threadpool (+ 1 concurrency) :daemon true)]
                                            (:pool (swap! (:iron-cache component) assoc :pool pool))))]
+
+                             ;; This future is the main poll loop:
                              (cp/future  pool
                                (let
                                    [messages      (receive-batch! component (or (:poller-batch-size component) 20))
