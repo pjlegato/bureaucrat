@@ -3,7 +3,9 @@
   (:use [midje.sweet]
         [helpers.bureaucrat.test-helpers])
   (:require [onelog.core :as log]
+            [com.climate.claypoole :as cp]
             [com.paullegato.bureaucrat.transports.util.ironmq :as util]
+            [com.paullegato.bureaucrat.util :refer [profile]]
             [com.paullegato.bureaucrat.endpoint         :as queue]
             [com.paullegato.bureaucrat.transport        :as transport]
             [com.paullegato.bureaucrat.data-endpoint    :as data]
@@ -113,6 +115,7 @@
           @result => test-message
           
           (queue/unregister-listener! endpoint)
+          (Thread/sleep 1000)
           (queue/registered-listener endpoint) => nil
           
           (queue/send! endpoint second-test-message {:ttl 10000})
@@ -274,3 +277,33 @@
             (queue/unregister-listener! endpoint)
             (close! send-channel)
             (close! recv)))))
+
+
+;; Avoid log spam from next test:
+(log/set-info!)
+(fact "the endpoint can handle many messages"
+      (profile
+       (let [endpoint @endpoint
+             result   (atom #{})
+             test-messages (doall (map str (range 100)))]
+         (try
+           (queue/purge! endpoint)
+           (queue/registered-listener endpoint) => nil
+           (queue/register-listener! endpoint
+                                     (fn [msg]
+                                       (swap! result conj msg))
+                                     5)
+
+           (dorun (cp/pmap 6
+                           #(queue/send! endpoint % {:ttl 60000})
+                           test-messages))
+
+
+           ;; Without this, the checker below may run before the message is
+           ;; delivered on heavily loaded boxes
+           (spin-on #(= (queue/count-messages endpoint) 0) 10 6000)
+
+           @result => (contains test-messages) 
+           (finally
+             (queue/unregister-listener! endpoint))))))
+(log/set-debug!)
