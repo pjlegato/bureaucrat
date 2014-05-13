@@ -43,7 +43,7 @@
             [clojure.core.async :as async :refer [map> map<]]))
 
 
-(defn- normalize-ingress
+(defn normalize-ingress
   "Ensures that the given message is a map. If it is not, makes it a
   map, and stores the original message under the :payload key.
 
@@ -59,7 +59,7 @@
                                    :ingress-time ingress-time}))))
 
 
-(defn- normalize-egress
+(defn normalize-egress
   "Strips the :bureaucrat key from the given message if it is a map."
   [message]
   (log/debug "[bureaucrat][normalizer] Normalizing the egress of message: " message)

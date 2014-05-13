@@ -32,15 +32,17 @@
   
 
   (handler-for-call [component call]
-    (let [call (str prefix (-> (str call)
-                               (.substring 1)))
-          fn   (resolve (symbol call))
-          api-allowed? (:api (meta fn))]
-      (if api-allowed?
-        fn
-        (do
-          (log/warn "[bureaucrat][metadata-api-router] Got a request for an invalid API call '" call "', rejecting!")
-          nil))))
+    (if-let [call (str prefix (if (keyword? call)
+                                (-> (str call)
+                                    (.substring 1))
+                                call))]
+      (let [fn   (resolve (symbol call))
+            api-allowed? (:api (meta fn))]
+        (if api-allowed?
+          fn
+          (do
+            (log/warn "[bureaucrat][metadata-api-router] Got a request for an invalid API call '" call "', rejecting!")
+            nil)))))
 
   (process-unhandled-message! [component message]
     (process-unhandled-message component message)))

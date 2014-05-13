@@ -5,7 +5,7 @@
 
             [onelog.core :as log]
             [clojure.core.async :as async :refer [<!! >!! close! chan]]
-            [com.paullegato.bureaucrat.async-connector :refer [endpoint> endpoint<]])
+            [com.paullegato.bureaucrat.channel-endpoint :refer [endpoint> endpoint<]])
   (:use [midje.sweet]
         [com.paullegato.bureaucrat.middleware.edn]
         [helpers.bureaucrat.test-helpers]))
