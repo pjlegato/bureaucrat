@@ -2,7 +2,7 @@
   "General utility functions."
     (:require [com.paullegato.bureaucrat.transport  :as transport]
               [com.paullegato.bureaucrat.endpoint   :as endpoint]
-
+              [com.paullegato.bureaucrat.middleware.normalizer :refer [normalize-egress]]
               [clojure.core.async :as async :refer [put! go-loop alts! >!]]
               [onelog.core :as log]))
 
@@ -33,7 +33,7 @@
        (try
          (let [message (if (string? message)
                          message
-                         (pr-str message))]
+                         (-> message normalize-egress pr-str))]
            (endpoint/send! dlq message))
          (catch Throwable t
            (log/error "[bureaucrat][api-router] Exception trying to send a message to the dead letter queue! Exception was: "

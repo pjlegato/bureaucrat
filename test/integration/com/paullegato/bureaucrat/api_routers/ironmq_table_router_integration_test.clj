@@ -39,10 +39,10 @@
           (>!! send-channel {:call :foo
                              :payload test-payload})
           ;; Await delivery
-          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 10 1000)
 
           ;; Await processing
-          (spin-on #(not (nil? @last-result)) 20 1000)
+          (spin-on #(not (nil? @last-result)) 10 1000)
 
           ;; Success!
           @last-result => test-payload
@@ -83,9 +83,9 @@
           
           ;; Make sure invalid API call went to the DLQ:
           (Thread/sleep 500)
-          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 10 1000)
           (Thread/sleep 500)
-          (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages dlq)) 10 1000)
 
           (<!!-timeout dlq-channel 20000) => (contains {:payload test-payload})
 
@@ -100,11 +100,11 @@
 
           ;; Await delivery from remote DLQ:
           (Thread/sleep 500)
-          (spin-on #(= 0 (endpoint/count-messages endpoint)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages endpoint)) 10 1000)
           (Thread/sleep 500)
-          (spin-on #(= 0 (endpoint/count-messages dlq)) 20 1000)
+          (spin-on #(= 0 (endpoint/count-messages dlq)) 10 1000)
 
-          (<!!-timeout dlq-channel 20000) => (contains {:payload other-test-payload})
+          (<!!-timeout dlq-channel 10000) => (contains {:payload other-test-payload})
 
           (finally
             ;; (async/close! dlq-channel)
