@@ -17,7 +17,7 @@
   IMessageTransport
 
   (create-in-backend! [component name options]
-    (log/info "[bureaucrat] Creating new IronMQ transport in backend: " name)
+    (log/info "[bureaucrat] Creating new IronMQ endpoint in backend: " name)
     ;; Options may have the :encoding key with a value of :json or
     ;; :edn. Messages going through the transport will be transncoded
     ;; in the given encoding. If not given, no encoding is used.
@@ -75,8 +75,10 @@
   If no credentials are given, as is recommended, the Java Client
   will attempt to use environment variables and the Iron.io config
   file to find values for them, as described at
-  http://dev.iron.io/worker/reference/configuration/."
+  http://dev.iron.io/worker/reference/configuration/.
+
+  TODO: Memoize, with auto-refresh upon failure"
   ([] (ironmq-transport nil nil nil))
   ([^String project-id ^String token ^Cloud cloud]
-     (log/debug "[bureaucrat] Connecting to IronMQ...")
+     (log/debug "[bureaucrat] Constructing a new IronMQ transport instance...")
      (map->IronMQTransport {:client (Client. project-id token cloud)})))
