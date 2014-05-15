@@ -93,8 +93,7 @@
   queue and returns it. Otherwise, returns nil. Does not block."
   [^Queue queue]
   (when-let [^Message message (try (.get queue)
-                                   (catch EmptyQueueException e 
-                                     nil))]
+                                   (catch EmptyQueueException e nil))]
     (.deleteMessage queue message)
     (.getBody message)))
 
@@ -115,11 +114,14 @@
 
 (def iqueueendpoint-implementations
   {
-   :transport (fn ([component] (:transport component)))
+   :transport (fn [component] (:transport component))
 
-   :purge! (fn ([component] (.clear (:queue component))))
+   :purge! (fn [component] 
+             (log/debug "[bureaucrat/ironmq] Purging queue: " (:name component))
+             (.clear (:queue component)))
 
    :unregister-listener!   (fn [component]
+                             (log/info "[bureaucrat/ironmq] Unregistering old listener on " (:name component) "...")                             
                              (swap! (:iron-cache component) assoc :should-halt true))
 
 
@@ -127,9 +129,11 @@
                                  (:handler-fn @(:iron-cache component))))
 
    :register-listener!   (fn [component handler-fn concurrency]
-
                            ;; Clear any old listener that may be around:
                            (unregister-listener! component)
+
+                           (log/info "[bureaucrat/ironmq] Registering new listener on " (:name component) "...")
+
                            (swap! (:iron-cache component) assoc :should-halt false)
                            (swap! (:iron-cache component) assoc :handler-fn handler-fn)
 
@@ -180,24 +184,26 @@
                          (str "/queues/" (:name component)))
                         "size"))
 
-   :receive-batch!   (fn
-                       ([component size]
-                          (let
-                              [queue (:queue component)
-                               messages (.getMessages (.get queue size))]
-                            (log/trace "[bureaucrat][ironmq] receive-batch! got " (count messages)  " messages.")
+   :receive-batch!   (fn [component size]
+                       (log/debug "[bureaucrat/ironmq] Queue " (:name component) " asking for a batch of size " size)
+                       (let
+                           [queue (:queue component)
+                            messages (.getMessages (.get queue size))]
+                         (log/trace "[bureaucrat][ironmq] receive-batch! got " (count messages)  " messages.")
 
-                            ;; 1) Delete from queue, acknowledging it;
-                            ;; 2) Convert the IronMQ client object into a string
-                            (doall
-                             (cp/pmap 4 (fn [message]
-                                          (.deleteMessage queue message)
-                                          (str message))
-                                      messages)))))
+                         ;; 1) Delete from queue, acknowledging it;
+                         ;; 2) Convert the IronMQ client object into a string
+                         (doall
+                          (cp/pmap 4 (fn [message]
+                                       (.deleteMessage queue message)
+                                       (str message))
+                                   messages))))
 
 
    :receive!   (fn
                  ([component timeout]
+                    (log/debug "[bureaucrat/ironmq] Queue " (:name component) " receiving a message with timeout " timeout)
+
                     ;; blocks for timeout ms
                     (let [wait-until (+ timeout (milli-time))
                           queue (:queue component)]
@@ -209,6 +215,7 @@
                             (recur))))))
 
                  ([component]
+                    (log/debug "[bureaucrat/ironmq] Queue " (:name component) " receiving a message (no timeout)")
                     (let
                         [queue (:queue component)]
                       (loop
@@ -222,6 +229,8 @@
    :send! (fn ([component message]
                  (send! component message nil))
             ([component message options]
+               (log/debug "[bureaucrat/ironmq] Queue " (:name component) " is being sent message: " message)
+
                ;; The protocl specifies that ttls are in milliseconds, but
                ;; IronMQ requires timeouts in seconds, not milliseconds.
                ;; ttls will be rounded up to the next second.
@@ -329,6 +338,7 @@
   Use the IronMQ IMessageTransport instance to create new instances
   rather than calling this directly!" 
   [name transport]
+  (log/debug "[bureaucrat/ironmq] Making new IronMQ endpoint with no specified encoding..")
   (map->IronMQEndpoint {:name name
                         :queue (.queue ^Client (:client transport) name)
                         :transport transport
@@ -344,6 +354,7 @@
   Use the IronMQ IMessageTransport instance to create new instances
   rather than calling this directly!" 
   [name transport]
+  (log/debug "[bureaucrat/ironmq] Making new IronMQ endpoint with JSON encoding..")
   (map->IronMQ-JSON-Endpoint {:name name
                               :queue (.queue ^Client (:client transport) name)
                               :transport transport
@@ -359,10 +370,10 @@
   Use the IronMQ IMessageTransport instance to create new instances
   rather than calling this directly!" 
   [name transport]
+  (log/debug "[bureaucrat/ironmq] Making new IronMQ endpoint with JSON encoding..")
   (map->IronMQ-EDN-Endpoint {:name name
                              :queue (.queue ^Client (:client transport) name)
                              :transport transport
                              :poller-batch-size 100
                              :iron-cache (atom {})}))
-
 

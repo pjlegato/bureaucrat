@@ -17,6 +17,7 @@
   IMessageTransport
 
   (create-in-backend! [component name options]
+    (log/info "[bureaucrat] Creating new IronMQ transport in backend: " name)
     ;; Options may have the :encoding key with a value of :json or
     ;; :edn. Messages going through the transport will be transncoded
     ;; in the given encoding. If not given, no encoding is used.
@@ -53,15 +54,18 @@
 
 
   (destroy-in-backend! [component queue-name]
+    (log/info "[bureaucrat/ironmq] Destroying queue in backend: " queue-name)
     (if-let [endpoint (lookup component queue-name)]
       (.destroy ^Queue (:queue endpoint))))
 
 
   (force-destroy! [component name]
+    (log/info "[bureaucrat/ironmq] Force-destroying queue in backend: " name)
     (destroy-in-backend! component name))
 
 
   (dead-letter-queue [component]
+    (log/debug "[bureaucrat/ironmq] Creating DLQ in backend")
     (create-in-backend! component dlq-name {:encoding :edn})))
 
 
@@ -74,4 +78,5 @@
   http://dev.iron.io/worker/reference/configuration/."
   ([] (ironmq-transport nil nil nil))
   ([^String project-id ^String token ^Cloud cloud]
+     (log/debug "[bureaucrat] Connecting to IronMQ...")
      (map->IronMQTransport {:client (Client. project-id token cloud)})))
