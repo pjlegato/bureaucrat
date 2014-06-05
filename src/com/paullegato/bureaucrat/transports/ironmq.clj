@@ -1,5 +1,24 @@
 (ns com.paullegato.bureaucrat.transports.ironmq
-  "IMessageTransport implementation on IronMQ (http://www.iron.io/)."
+  "IMessageTransport implementation on IronMQ (http://www.iron.io/).
+
+  You must specify an IronMQ project ID, OAuth2 token, and server
+  hostname to use. This can be done by creating an ~/.iron.json file, by
+  providing arguments to (ironmq-transport), or by setting the
+  environment variables expected by the IronMQ library before running
+  your Clojure process. The config file and env variables are described
+  in detail at [http://dev.iron.io/worker/reference/configuration/](IronIO's website).
+
+  I find it most convenient to use ~/.iron.json for development and
+  environment variables for production. These both avoid having
+  credentials in your source code, and env variables map nicely into 12 factor app harnesses.
+
+  The relevant env variables are:
+
+  * `IRON_PROJECT_ID` - set to the project ID from your IronMQ account.
+  * `IRON_TOKEN` - set to your IronMQ secret access token.
+
+"
+
   (:use com.paullegato.bureaucrat.transport
         com.paullegato.bureaucrat.transports.util.ironmq
         [slingshot.slingshot :only [try+ throw+]])
@@ -76,6 +95,10 @@
   will attempt to use environment variables and the Iron.io config
   file to find values for them, as described at
   http://dev.iron.io/worker/reference/configuration/.
+
+   If given, the `:cloud` value must be one of the constants defined in the
+  `[http://iron-io.github.io/iron_mq_java/io/iron/ironmq/Cloud.html](io.iron.ironmq.Cloud)`
+   class.
 
   TODO: Memoize, with auto-refresh upon failure"
   ([] (ironmq-transport nil nil nil))

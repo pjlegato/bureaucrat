@@ -15,26 +15,6 @@
      to the dead letter queue without a retry. Future versions may
      implement retries.
 
-   * Besides the queue name, you must specify an IronMQ project ID,
-     OAuth2 token, and server hostname to use. This is best
-     accomplished by creating the
-     [http://dev.iron.io/worker/reference/configuration/]( environment
-     variables or the iron.json config file described at Iron's
-     website).
-
-     For development, you can pass a hash with any of the following
-     keys. If any are unspecified, the IronMQ client library will
-     attempt to fall back on the environment variables and config
-     files linked above.
-
-          ```` {:project-id \"your-project\" :token
-          \"your-oauth2-token\" :cloud
-          io.iron.ironmq.Cloud/ironAWSUSEast } ````
-
-   * The `:cloud` value must be one of the constants defined in the
-     `[http://iron-io.github.io/iron_mq_java/io/iron/ironmq/Cloud.html](io.iron.ironmq.Cloud)`
-     class.
-
    * IronMQ does not have intrinsic dead letter queues.  We simulate a
      limited DLQ here by creating a queue called \"DLQ\". If a message
      listener function throws an exception, the message that caused
