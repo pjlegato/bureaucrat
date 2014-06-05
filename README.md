@@ -411,12 +411,6 @@ requires.
              "-Xmx512m" "-Xms512m" "-XX:+UseG1GC"]
 ```
 
-## Roadmap
-* HTTP transport
-* HornetQ
-* Amazon SQS
-* Provide additional canned enterprise messaging widgets for routing
-  and transformation beyond the API router.
 
 ## Component / Lifecycle Architecture
 
@@ -435,6 +429,20 @@ instead use the convenience method
 `bureaucrat.endpoints.hornetq/start-hornetq-endpoint!`, which creates
 the HornetQ adapter component and also starts it for you (that is,
 connects it to the HornetQ backend.)
+
+
+## Contributing
+
+### Roadmap
+* HTTP transport
+* HornetQ
+* Amazon SQS
+* Provide additional canned enterprise messaging widgets for routing
+  and transformation beyond the API router.
+* ZeroMQ
+* Nanomsg
+* IronMQ push mode (by exposing a webhook)
+
 
 
 ## License
