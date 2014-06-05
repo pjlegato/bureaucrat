@@ -53,6 +53,7 @@
             [onelog.core        :as log]
             [org.httpkit.client :as http]
             [com.climate.claypoole :as cp]
+            [environ.core :refer [env]]
 
             [clojure.core.async :as async :refer [map> map< <! >! >!! put! go go-loop chan]]
             [com.paullegato.bureaucrat.util :as util :refer [milli-time pmax]]
@@ -65,7 +66,8 @@
 
 
 ;; How long to sleep between poll cycles, in ms
-(def poll-sleep-time 1000)
+(def poll-sleep-time (or (env :bureaucrat-ironmq-poll-sleep-time)
+                         10000))
 
 
 (defn try-to-get-message
