@@ -1,5 +1,24 @@
 (ns com.paullegato.bureaucrat.transports.ironmq
-  "IMessageTransport implementation on IronMQ (http://www.iron.io/)."
+  "IMessageTransport implementation on IronMQ (http://www.iron.io/).
+
+  You must specify an IronMQ project ID, OAuth2 token, and server
+  hostname to use. This can be done by creating an ~/.iron.json file, by
+  providing arguments to (ironmq-transport), or by setting the
+  environment variables expected by the IronMQ library before running
+  your Clojure process. The config file and env variables are described
+  in detail at [http://dev.iron.io/worker/reference/configuration/](IronIO's website).
+
+  I find it most convenient to use ~/.iron.json for development and
+  environment variables for production. These both avoid having
+  credentials in your source code, and env variables map nicely into 12 factor app harnesses.
+
+  The relevant env variables are:
+
+  * `IRON_PROJECT_ID` - set to the project ID from your IronMQ account.
+  * `IRON_TOKEN` - set to your IronMQ secret access token.
+
+"
+
   (:use com.paullegato.bureaucrat.transport
         com.paullegato.bureaucrat.transports.util.ironmq
         [slingshot.slingshot :only [try+ throw+]])
@@ -17,6 +36,7 @@
   IMessageTransport
 
   (create-in-backend! [component name options]
+    (log/info "[bureaucrat] Creating new IronMQ endpoint in backend: " name)
     ;; Options may have the :encoding key with a value of :json or
     ;; :edn. Messages going through the transport will be transncoded
     ;; in the given encoding. If not given, no encoding is used.
@@ -53,15 +73,18 @@
 
 
   (destroy-in-backend! [component queue-name]
+    (log/info "[bureaucrat/ironmq] Destroying queue in backend: " queue-name)
     (if-let [endpoint (lookup component queue-name)]
       (.destroy ^Queue (:queue endpoint))))
 
 
   (force-destroy! [component name]
+    (log/info "[bureaucrat/ironmq] Force-destroying queue in backend: " name)
     (destroy-in-backend! component name))
 
 
   (dead-letter-queue [component]
+    (log/debug "[bureaucrat/ironmq] Creating DLQ in backend")
     (create-in-backend! component dlq-name {:encoding :edn})))
 
 
@@ -71,7 +94,14 @@
   If no credentials are given, as is recommended, the Java Client
   will attempt to use environment variables and the Iron.io config
   file to find values for them, as described at
-  http://dev.iron.io/worker/reference/configuration/."
+  http://dev.iron.io/worker/reference/configuration/.
+
+   If given, the `:cloud` value must be one of the constants defined in the
+  `[http://iron-io.github.io/iron_mq_java/io/iron/ironmq/Cloud.html](io.iron.ironmq.Cloud)`
+   class.
+
+  TODO: Memoize, with auto-refresh upon failure"
   ([] (ironmq-transport nil nil nil))
   ([^String project-id ^String token ^Cloud cloud]
+     (log/debug "[bureaucrat] Constructing a new IronMQ transport instance...")
      (map->IronMQTransport {:client (Client. project-id token cloud)})))

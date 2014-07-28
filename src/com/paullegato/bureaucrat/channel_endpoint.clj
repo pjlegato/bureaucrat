@@ -74,7 +74,7 @@
          ;; Take returns nil when the channel is closed. In that case,
          ;; we exit the go loop rather than recurring.
          (if-let [message (<! channel)]
-           (do  (log/debug "[bureaucrat][channel-connector/endpoint<::" (:name endpoint) "]  got message " message ", dispatching to endpoint " (:name endpoint) )
+           (do  (log/debug "[bureaucrat][channel-connector/endpoint<::" (:name endpoint) "]  got message " message  ", dispatching to endpoint " (:name endpoint) )
                 (send! endpoint message send-options)
                 (recur))
            (log/warn "[bureaucrat][channel-connector/endpoint<]: exiting the go-loop for endpoint " (:name endpoint) " because my source channel was closed.")))

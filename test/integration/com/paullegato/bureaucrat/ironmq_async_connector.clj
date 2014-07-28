@@ -1,10 +1,10 @@
-(ns integration.com.paullegato.bureaucrat.ironmq-async-connectors
+(ns integration.com.paullegato.bureaucrat.ironmq-async-connector
   "Connects an IronMQ endpoint to core.async and tests the result"
   (:require [com.paullegato.bureaucrat.endpoints.ironmq :as iq]
             [com.paullegato.bureaucrat.endpoint :as queue]
             [onelog.core :as log]
             [clojure.core.async :as async :refer [<!! >!! close! chan]]
-            [com.paullegato.bureaucrat.async-connector :refer [endpoint> endpoint<]])
+            [ com.paullegato.bureaucrat.channel-endpoint :refer [endpoint> endpoint<]])
   (:use [midje.sweet]
         [helpers.bureaucrat.test-helpers]))
 

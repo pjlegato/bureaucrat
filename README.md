@@ -361,6 +361,27 @@ user> (endpoint/count-messages queue)
 0
 ````
 
+## Provided Endpoint Implementations
+
+### IronMQ
+
+You must specify an IronMQ project ID, OAuth2 token, and server
+hostname to use. This can be done by creating an ~/.iron.json file, by
+providing arguments to (ironmq-transport), or by setting the
+environment variables expected by the IronMQ library before running
+your Clojure process. The config file and env variables are described
+in detail at [http://dev.iron.io/worker/reference/configuration/](IronIO's website).
+
+I find it most convenient to use ~/.iron.json for development and
+environment variables for production. These both avoid having
+credentials in your source code, and env variables map nicely into 12 factor app harnesses.
+
+The relevant env variables are:
+
+  * `IRON_PROJECT_ID` - set to the project ID from your IronMQ account.
+  * `IRON_TOKEN` - set to your IronMQ secret access token.
+
+
 ## Security
 Security is handled at the transport layer, and not by Bureaucrat. Any
 message that gets into an incoming message queue will be processed by
@@ -387,16 +408,9 @@ requires.
 
 ````
   :jvm-opts ["-d64" "-Duser.timezone=GMT" "-server" "-Djava.awt.headless=true" "-Dfile.encoding=utf-8"
-             "-Xmx512m" "-Xms512m" 
-             "-XX:+UseConcMarkSweepGC" "-XX:+CMSIncrementalMode"
+             "-Xmx512m" "-Xms512m" "-XX:+UseG1GC"]
 ```
 
-## Roadmap
-* HTTP transport
-* HornetQ
-* Amazon SQS
-* Provide additional canned enterprise messaging widgets for routing
-  and transformation beyond the API router.
 
 ## Component / Lifecycle Architecture
 
@@ -415,6 +429,20 @@ instead use the convenience method
 `bureaucrat.endpoints.hornetq/start-hornetq-endpoint!`, which creates
 the HornetQ adapter component and also starts it for you (that is,
 connects it to the HornetQ backend.)
+
+
+## Contributing
+
+### Roadmap
+* HTTP transport
+* HornetQ
+* Amazon SQS
+* Provide additional canned enterprise messaging widgets for routing
+  and transformation beyond the API router.
+* ZeroMQ
+* Nanomsg
+* IronMQ push mode (by exposing a webhook)
+
 
 
 ## License

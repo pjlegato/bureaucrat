@@ -15,26 +15,6 @@
      to the dead letter queue without a retry. Future versions may
      implement retries.
 
-   * Besides the queue name, you must specify an IronMQ project ID,
-     OAuth2 token, and server hostname to use. This is best
-     accomplished by creating the
-     [http://dev.iron.io/worker/reference/configuration/]( environment
-     variables or the iron.json config file described at Iron's
-     website).
-
-     For development, you can pass a hash with any of the following
-     keys. If any are unspecified, the IronMQ client library will
-     attempt to fall back on the environment variables and config
-     files linked above.
-
-          ```` {:project-id \"your-project\" :token
-          \"your-oauth2-token\" :cloud
-          io.iron.ironmq.Cloud/ironAWSUSEast } ````
-
-   * The `:cloud` value must be one of the constants defined in the
-     `[http://iron-io.github.io/iron_mq_java/io/iron/ironmq/Cloud.html](io.iron.ironmq.Cloud)`
-     class.
-
    * IronMQ does not have intrinsic dead letter queues.  We simulate a
      limited DLQ here by creating a queue called \"DLQ\". If a message
      listener function throws an exception, the message that caused
@@ -73,10 +53,10 @@
             [onelog.core        :as log]
             [org.httpkit.client :as http]
             [com.climate.claypoole :as cp]
+            [environ.core :refer [env]]
 
-            [clojure.core.async :as async :refer [map> map<]]
-
-            [com.paullegato.bureaucrat.util :as util]
+            [clojure.core.async :as async :refer [map> map< <! >! >!! put! go go-loop chan]]
+            [com.paullegato.bureaucrat.util :as util :refer [milli-time pmax]]
 
             [com.paullegato.bureaucrat.transport :as transport]
             [com.paullegato.bureaucrat.channel-endpoint :as channel-endpoint :refer [IChannelEndpoint endpoint< endpoint>]]
@@ -86,13 +66,8 @@
 
 
 ;; How long to sleep between poll cycles, in ms
-(def poll-sleep-time 500)
-
-
-(defn- milli-time
-  "Returns System/nanoTime converted to milliseconds."
-  []
-  (long (/ (System/nanoTime) 1000000)))
+(def poll-sleep-time (or (env :bureaucrat-ironmq-poll-sleep-time)
+                         10000))
 
 
 (defn try-to-get-message
@@ -100,62 +75,96 @@
   queue and returns it. Otherwise, returns nil. Does not block."
   [^Queue queue]
   (when-let [^Message message (try (.get queue)
-                                   (catch EmptyQueueException e 
-                                     nil))]
+                                   (catch EmptyQueueException e nil))]
     (.deleteMessage queue message)
     (.getBody message)))
 
 
+(defn try-handler
+  "Tries to run handler-fn on message. If it throws an exception, logs
+  the exception and sends message to the DLQ on transport"
+  [handler-fn message transport]
+  (log/debug "[bureaucrat/ironmq] Background poller processing message: " message)
+  (try
+    (handler-fn message)
+    (log/trace "[bureaucrat/ironmq] Background poller finished processing message: " message)
+    (catch Throwable t
+      (log/error "[bureaucrat/ironmq] Background poller: error processing message " message
+                 " - " (log/throwable t))
+      (util/send-to-dlq! transport message))))
+
+
+(defn log-prefix
+  [component]
+  (str "[bureaucrat][ironmq::"
+       (or (:name component)
+           "<unbound>")
+       "-"(.hashCode component)
+       "] "))
+
 
 (def iqueueendpoint-implementations
   {
-   :transport (fn ([component] (:transport component)))
+   :transport (fn [component] (:transport component))
 
-   :purge! (fn ([component] (.clear (:queue component))))
+   :purge! (fn [component] 
+             (log/debug "[bureaucrat/ironmq] Purging queue: " (:name component))
+             (.clear (:queue component)))
 
-   :unregister-listener!
-   (fn
-     ([component]
-        (swap! (:iron-cache component) assoc :should-halt true)
-        (when-let
-            [pool (registered-listener component)]
-          (cp/shutdown pool)
-          (swap! (:iron-cache component) dissoc :pool))))
+   :unregister-listener!   (fn [component]
+                             (log/info (log-prefix component) "Unregistering old listener on " (:name component) "...")                             
+                             (swap! (:iron-cache component) assoc :should-halt true))
 
 
-   :registered-listener
-   (fn ([component] (:pool @(:iron-cache component))))
-
+   :registered-listener   (fn ([component]
+                                 (:handler-fn @(:iron-cache component))))
 
    :register-listener!   (fn [component handler-fn concurrency]
+                           ;; Clear any old listener that may be around:
                            (unregister-listener! component)
+
+                           (log/info (log-prefix component) "Registering new listener on " (:name component) "...")
+
                            (swap! (:iron-cache component) assoc :should-halt false)
-                           (let
-                               [pool (or (:pool (:iron-cache component))
-                                         (let [pool (cp/threadpool (+ 1 concurrency) :daemon true)]
-                                           (:pool (swap! (:iron-cache component) assoc :pool pool))))]
-                             (cp/future  pool
-                               (let
-                                   [messages      (receive-batch! component (or (:poller-batch-size component) 20))
-                                    message-count (count messages)]
-                                 (when (> message-count 0)
-                                   (log/info "[bureaucrat][ironmq::" (:name component) "] Background message poller got "  message-count " messages.")
-                                   (doall (cp/pmap pool
-                                                   (fn [message]
-                                                     (log/debug "[bureaucrat][ironmq::" (:name component) "] Background poller processing message: " message)
-                                                     (try
-                                                       (handler-fn message)
-                                                       (log/debug "[bureaucrat][ironmq::" (:name component) "] Background poller finished processing message: " message)
-                                                       (catch Throwable t
-                                                         (log/error "[bureaucrat/ironmq::" (:name component) "] Background poller: error processing message " message
-                                                                    " - " (log/throwable t))
-                                                         (util/send-to-dlq! message))))
-                                                   messages))))
-                               (Thread/sleep poll-sleep-time)
-                               (if
-                                   (:should-halt @(:iron-cache component))
-                                 (log/info "[bureaucrat][ironmq::" (:name component) "] Background poller got halt notice, stopping.")
-                                 (recur)))))
+                           (swap! (:iron-cache component) assoc :handler-fn handler-fn)
+
+                           ;; IronMQ requires us to poll or expose a webhook endpoint. 
+                           ;; For now, we poll in a go loop, and write the messages we 
+                           ;; get onto a channel for async processing by the handler 
+                           ;; function later.
+                           ;;
+                           ;; The poller will write newly recevied messages to this buffer
+                           ;; channel, for later processing by a worker:
+                           (let [buffer-channel (chan 1000)]
+
+                             ;; Main poll loop thread:
+                             (async/thread
+                               (try
+                                 (loop []
+                                   (let [messages      (receive-batch! component (or (:poller-batch-size component) 30))
+                                         message-count (count messages)]
+                                     (when (> message-count 0)
+                                       (log/debug (log-prefix component) " Background message poller got "  message-count " messages.")
+                                       (doseq [m messages]
+                                         (>!! buffer-channel m))))
+
+                                   (Thread/sleep poll-sleep-time)
+
+                                   (if (:should-halt @(:iron-cache component))
+                                     (do
+                                       (log/info (log-prefix component) "Background poller got halt notice, stopping.")
+                                       (swap! (:iron-cache component) dissoc :handler-fn)
+                                       (async/close! buffer-channel))
+                                     (recur)))
+                                 (catch Throwable t
+                                   (log/error+ (log-prefix component) "Got an error in IronMQ poller thread! " (log/throwable t)))))
+
+                             ;; Processors:
+                             (pmax concurrency
+                                   (fn [message]
+                                     (go (try-handler handler-fn message (:transport component))))
+                                   buffer-channel
+                                   (chan))))
 
 
    :count-messages   (fn [component]
@@ -166,21 +175,26 @@
                          (str "/queues/" (:name component)))
                         "size"))
 
-   :receive-batch!   (fn
-                       ([component size]
-                          (let
-                              [queue
-                               (:queue component)
-                               messages
-                               (.getMessages (.get queue size))]
-                            (doall
-                             (pmap
-                              (fn [message] (.deleteMessage queue message) (str message))
-                              messages)))))
+   :receive-batch!   (fn [component size]
+                       (log/debug (log-prefix component)  "Asking backend for a message batch of size " size)
+                       (let
+                           [queue (:queue component)
+                            messages (.getMessages (.get queue size))]
+                         (log/trace (log-prefix component) "receive-batch! got " (count messages)  " messages.")
+
+                         ;; 1) Delete from queue, acknowledging it;
+                         ;; 2) Convert the IronMQ client object into a string
+                         (doall
+                          (cp/pmap 4 (fn [message]
+                                       (.deleteMessage queue message)
+                                       (str message))
+                                   messages))))
 
 
    :receive!   (fn
                  ([component timeout]
+                    (log/debug (log-prefix component) "Queue " (:name component) " receiving a message with timeout " timeout)
+
                     ;; blocks for timeout ms
                     (let [wait-until (+ timeout (milli-time))
                           queue (:queue component)]
@@ -192,6 +206,7 @@
                             (recur))))))
 
                  ([component]
+                    (log/debug (log-prefix component) "Queue " (:name component) " receiving a message (no timeout)")
                     (let
                         [queue (:queue component)]
                       (loop
@@ -205,11 +220,13 @@
    :send! (fn ([component message]
                  (send! component message nil))
             ([component message options]
+               (log/debug (log-prefix component) "Queue " (:name component) " is being sent message: " message)
+
                ;; The protocl specifies that ttls are in milliseconds, but
                ;; IronMQ requires timeouts in seconds, not milliseconds.
                ;; ttls will be rounded up to the next second.
                (if-not message
-                 (log/error "[bureaucrat][ironmq::" (:name component) "] send! got a nil message; ignoring it.") 
+                 (log/error  (log-prefix component)  "send! got a nil message; ignoring it.") 
                  (let [ttl (:ttl options)
                        queue ^Queue (:queue component)
 
@@ -218,9 +235,11 @@
                        message (if (string? message)
                                  message
                                  (do
-                                   (log/warn "[bureaucrat][ironmq::" (:name component) "] send! got a non-string message; coercing it to a string. You should arrange for all messages to be strings!")
+                                   (log/warn (log-prefix component)
+                                             "send! got a non-string message; coercing it to a string. "
+                                             "You should arrange for all messages to be strings with middleware instead.")
                                    (pr-str message)))]
-                   (log/debug "[bureaucrat][ironmq::" (:name component) "] Sending message: " message)
+                   (log/debug  (log-prefix component) "Sending message: " message)
                    (if (or (nil? ttl)
                            (< ttl 1))
                      (.push queue message)
@@ -310,6 +329,7 @@
   Use the IronMQ IMessageTransport instance to create new instances
   rather than calling this directly!" 
   [name transport]
+  (log/debug "[bureaucrat/ironmq] Making new IronMQ endpoint called " name " with no specified encoding..")
   (map->IronMQEndpoint {:name name
                         :queue (.queue ^Client (:client transport) name)
                         :transport transport
@@ -325,6 +345,7 @@
   Use the IronMQ IMessageTransport instance to create new instances
   rather than calling this directly!" 
   [name transport]
+  (log/debug "[bureaucrat/ironmq] Making new IronMQ endpoint called " name " with JSON encoding..")
   (map->IronMQ-JSON-Endpoint {:name name
                               :queue (.queue ^Client (:client transport) name)
                               :transport transport
@@ -340,10 +361,10 @@
   Use the IronMQ IMessageTransport instance to create new instances
   rather than calling this directly!" 
   [name transport]
+  (log/debug "[bureaucrat/ironmq] Making new IronMQ endpoint called " name " with JSON encoding..")
   (map->IronMQ-EDN-Endpoint {:name name
                              :queue (.queue ^Client (:client transport) name)
                              :transport transport
                              :poller-batch-size 100
                              :iron-cache (atom {})}))
-
 
