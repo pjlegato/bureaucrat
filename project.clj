@@ -1,4 +1,4 @@
-(defproject bureaucrat "0.2.2-SNAPSHOT"
+(defproject bureaucrat "0.2.3-SNAPSHOT"
   :description "MQ-based API router"
   :url "https://github.com/pjlegato/bureaucrat/"
   :license {:name "Eclipse Public License"
@@ -23,7 +23,7 @@
                  [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
                  [com.climate/claypoole "0.2.1"]  ;; Thread pool management
                  [org.clojure/tools.reader "0.8.4"] ;; Safe EDN parser
-                 [onelog "0.4.4-SNAPSHOT"]  ;; Logging library
+                 [onelog "0.4.4"]  ;; Logging library
                  [environ "0.4.0"] ;; Read config values from env vars
 
                  [org.clojars.pjlegato/clansi   "1.3.0"] ;; ANSI colorization
