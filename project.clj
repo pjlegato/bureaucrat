@@ -1,4 +1,4 @@
-(defproject bureaucrat "0.2.2-SNAPSHOT"
+(defproject bureaucrat "0.2.2"
   :description "MQ-based API router"
   :url "https://github.com/pjlegato/bureaucrat/"
   :license {:name "Eclipse Public License"
