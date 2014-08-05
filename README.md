@@ -10,8 +10,13 @@ dispatches incoming API messages to designated Clojure functions,
 optionally sending replies back to the caller, and a core.async based
 middleware system for plumbing this all together in arbitrary ways.
 
-Bureaucrat is alpha-stage software; API changes are still
-possible. Pull requests are welcome!
+## Alpha quality code
+
+Bureaucrat is very much alpha-stage software; API changes are still
+possible, and there may be any number of known or unknown bugs. Use it
+in production code at your own risk!
+
+Pull requests and design suggestions are welcome!
 
 ### Why the name "bureaucrat"?
 The library merely shuttles messages around between endpoints, which
