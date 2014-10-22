@@ -59,6 +59,7 @@
             [com.paullegato.bureaucrat.util :as util :refer [milli-time pmax]]
 
             [com.paullegato.bureaucrat.transport :as transport]
+            [com.paullegato.bureaucrat.endpoint :as ep]
             [com.paullegato.bureaucrat.channel-endpoint :as channel-endpoint :refer [IChannelEndpoint endpoint< endpoint>]]
             [com.paullegato.bureaucrat.data-endpoint :as data-endpoint :refer [IDataEndpoint]]
             [org.tobereplaced (mapply :refer [mapply])])
@@ -157,7 +158,13 @@
                                        (async/close! buffer-channel))
                                      (recur)))
                                  (catch Throwable t
-                                   (log/error+ (log-prefix component) "Got an error in IronMQ poller thread! " (log/throwable t)))))
+                                   (log/error+ (log-prefix component) "Got an error in IronMQ poller thread! " (log/throwable t))
+
+                                   ;; Attempt to reconnect, after a delay:
+                                   (Thread/sleep 10000)
+
+                                   (log/error+ (log-prefix component) "Attempting to re-register endpoint handler-fn...")
+                                   (ep/register-listener! component handler-fn concurrency))))
 
                              ;; Processors:
                              (pmax concurrency
@@ -176,7 +183,7 @@
                         "size"))
 
    :receive-batch!   (fn [component size]
-                       (log/debug (log-prefix component)  "Asking backend for a message batch of size " size)
+                       (log/trace (log-prefix component)  "Asking backend for a message batch of size " size)
                        (let
                            [queue (:queue component)
                             messages (.getMessages (.get queue size))]
