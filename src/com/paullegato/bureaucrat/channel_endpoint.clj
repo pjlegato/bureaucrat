@@ -50,7 +50,8 @@
        (log/debug "[bureaucrat][channel-connector/endpoint<::" (:name endpoint) "] Registering a channel endpoint.")
        (register-listener! endpoint
                            (fn [message]
-                             (log/debug "[bureaucrat][channel-connector/endpoint>::" (:name endpoint) "] got message " message ", dispatching to channel")
+                             (log/debug "[bureaucrat][channel-connector/endpoint>::" (:name endpoint) "] got message '" message
+                                        "', dispatching to channel")
                              (when-not (>!! channel message)
                                (log/error "[bureaucrat][channel-connector/endpoint>::" (:name endpoint) "]: unregistering listener function from endpoint because my core.async channel has been closed! Was processing message: " message)
                                (unregister-listener! endpoint)

@@ -147,7 +147,13 @@
                                      (when (> message-count 0)
                                        (log/debug (log-prefix component) " Background message poller got "  message-count " messages.")
                                        (doseq [m messages]
-                                         (>!! buffer-channel m))))
+                                         ;; Don't send empty messages, because the receiver end
+                                         ;; uses a null next-message to determine when the channel has been closed.
+                                         ;; It would therefore be fatally confused by an actually open channel that
+                                         ;; sends an empty message. So, messages in Bureaucrat are by definition non-empty.
+                                         (if (empty? m)
+                                           (log/warn "[bureaucrat/ironmq] Got empty message, ignoring it.")
+                                           (>!! buffer-channel m)))))
 
                                    (Thread/sleep poll-sleep-time)
 

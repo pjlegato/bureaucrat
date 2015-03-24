@@ -4,8 +4,17 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :jvm-opts ["-d64" "-Duser.timezone=GMT" "-server" "-Djava.awt.headless=true" "-Dfile.encoding=utf-8"
-             "-Xmx1024m" "-Xms1024m" 
-             "-XX:+UseConcMarkSweepGC" "-XX:+CMSIncrementalMode" "-XX:+PrintGCDetails" "-XX:+PrintGCTimeStamps"
+             "-Xmx1024m" "-Xms1024m"
+
+             ;; For Java 8
+             "-XX:+UseG1GC"
+             
+             ;; For Java <= 7
+             ;;"-XX:+UseConcMarkSweepGC" "-XX:+CMSIncrementalMode"
+
+             ;; Produces verbose output for GC tuning:
+             ;;"-XX:+PrintGCDetails" "-XX:+PrintGCTimeStamps" "-XX:+PrintGCDateStamps" "-XX:+PrintTenuringDistribution"
+
              ]
   :dependencies [[org.clojure/clojure "1.6.0"]
                  
@@ -23,7 +32,7 @@
                  [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
                  [com.climate/claypoole "0.2.1"]  ;; Thread pool management
                  [org.clojure/tools.reader "0.8.4"] ;; Safe EDN parser
-                 [onelog "0.4.5"]  ;; Logging library
+                 [onelog "0.5.0-SNAPSHOT"]  ;; Logging library
                  [environ "0.4.0"] ;; Read config values from env vars
 
                  [org.clojars.pjlegato/clansi   "1.3.0"] ;; ANSI colorization

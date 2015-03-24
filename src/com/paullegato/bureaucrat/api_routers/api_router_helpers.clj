@@ -61,10 +61,11 @@
   to look up the appropriate handler using `handler-for-call`. If found,
   runs the handler."
   [component message]
-    (if-let [handler (handler-for-call component (keyword (:call message)))]
-      (do (log/info "[bureaucrat][api-helpers] Looking up handler for call: " (:call message) ". Message is: " message)
-          (try-handler handler message))
-      (api-router/process-unhandled-message! component message)))
+  (log/debug "[bureaucrat][api-router-helpers] Trying to process raw message: " message)
+  (if-let [handler (handler-for-call component (keyword (:call message)))]
+    (do (log/info "[bureaucrat][api-router-helpers] Looking up handler for call: " (:call message) ". Message is: " message)
+        (try-handler handler message))
+    (api-router/process-unhandled-message! component message)))
 
 
 (defn apply-router!
@@ -72,9 +73,11 @@
   to the given IAPIRouter as they arrive.
   TODO: Concurrency"
   [source-channel router]
+  (log/debug "[bureaucrat] Adding API router " router " to " source-channel "...")
   (go-loop [next-message (<! source-channel)]
+    (log/debug "[bureaucrat][api-router-helpers] Got raw message: " next-message)
     (if-not next-message
-      (log/warn "[bureaucrat][API router] Source channel closed; exiting API router loop for router " router)
+      (log/warn "[bureaucrat][api-router-helpers] Source channel closed; exiting API router loop for router " router)
       (do
         (api-router/process-message! router next-message)
         (recur (<! source-channel))))))
@@ -82,8 +85,10 @@
 
 (defn process-unhandled-message
   [component message]
+  (log/debug "[bureaucrat][api-router-helpers] No handler found; sending message to default handler fn. Raw message is: " message)
   (if-let [f (:unhandled-message-fn component)]
     (f component message)
     (do
-      (log/warn "[bureaucrat][table-api-router] Couldn't find a valid API handler for call '" (:call message) "'; discarding.\nMessage was: " message)
+      (log/warn "[bureaucrat][api-router-helpers] Couldn't find a valid API handler for call '" (:call message)
+                "'; discarding.\nMessage was: " message)
       (send-to-dlq! message))))
