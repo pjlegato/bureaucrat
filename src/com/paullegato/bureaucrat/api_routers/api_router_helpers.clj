@@ -30,10 +30,10 @@
   If there are any errors, logs them and attempts to put the message
   on the DLQ."
   [f message]
-  (log/info "[bureaucrat][api-router] Got message: " message)
+  (log/info "[bureaucrat][api-router] Got message: " (pr-str message))
 
   (when-not (valid-api-message? message)
-    (log/error "[bureaucrat][api-router] Rejecting invalid message: " message)
+    (log/error "[bureaucrat][api-router] Rejecting invalid message: " (pr-str message))
     (send-to-dlq! message))
   
   (let [ingress-transport (-> message :bureaucrat :ingress-endpoint :transport)]
@@ -50,7 +50,7 @@
 
       (catch Throwable t
         (log/error "[bureaucrat][api-router] Error running API handler: "
-                   (log/throwable t) "\nOriginal message was:\n" message)
+                   (log/throwable t) "\nOriginal message was:\n" (pr-str message))
 
         ;; Forward a copy of the message to the dead letter queue, if possible:
         (send-to-dlq! message)))))
@@ -61,9 +61,10 @@
   to look up the appropriate handler using `handler-for-call`. If found,
   runs the handler."
   [component message]
-  (log/debug "[bureaucrat][api-router-helpers] Trying to process raw message: " message)
+  (log/debug "[bureaucrat][api-router-helpers] Trying to process raw message: " (pr-str message))
   (if-let [handler (handler-for-call component (keyword (:call message)))]
-    (do (log/info "[bureaucrat][api-router-helpers] Looking up handler for call: " (:call message) ". Message is: " message)
+    (do (log/info "[bureaucrat][api-router-helpers] Looking up handler for call: " (:call message)
+                  ". Message is: " (pr-str message))
         (try-handler handler message))
     (api-router/process-unhandled-message! component message)))
 
@@ -75,7 +76,7 @@
   [source-channel router]
   (log/debug "[bureaucrat] Adding API router " router " to " source-channel "...")
   (go-loop [next-message (<! source-channel)]
-    (log/debug "[bureaucrat][api-router-helpers] Got raw message: " next-message)
+    (log/debug "[bureaucrat][api-router-helpers] Got raw message: " (pr-str next-message))
     (if-not next-message
       (log/warn "[bureaucrat][api-router-helpers] Source channel closed; exiting API router loop for router " router)
       (do
@@ -85,10 +86,10 @@
 
 (defn process-unhandled-message
   [component message]
-  (log/debug "[bureaucrat][api-router-helpers] No handler found; sending message to default handler fn. Raw message is: " message)
+  (log/debug "[bureaucrat][api-router-helpers] No handler found; sending message to default handler fn. Raw message is: " (pr-str message))
   (if-let [f (:unhandled-message-fn component)]
     (f component message)
     (do
       (log/warn "[bureaucrat][api-router-helpers] Couldn't find a valid API handler for call '" (:call message)
-                "'; discarding.\nMessage was: " message)
+                "'; discarding. Message was: " (pr-str message))
       (send-to-dlq! message))))

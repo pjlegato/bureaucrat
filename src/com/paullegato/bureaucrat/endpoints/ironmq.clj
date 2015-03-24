@@ -47,6 +47,7 @@
         com.paullegato.bureaucrat.transports.util.ironmq
         [slingshot.slingshot :only [try+ throw+]])
   (:require [clojure.math.numeric-tower :as math]
+            [clojure.string :refer [trim]]
 
             [com.paullegato.bureaucrat.middleware.json :as json :refer [json-encode> json-decode<]]
             [com.paullegato.bureaucrat.middleware.edn  :as edn  :refer [edn-encode>  edn-decode<]]
@@ -85,12 +86,12 @@
   "Tries to run handler-fn on message. If it throws an exception, logs
   the exception and sends message to the DLQ on transport"
   [handler-fn message transport]
-  (log/debug "[bureaucrat/ironmq] Background poller processing message: " message)
+  (log/debug "[bureaucrat/ironmq] Background poller: running handler-fn on message: " (pr-str message))
   (try
     (handler-fn message)
-    (log/trace "[bureaucrat/ironmq] Background poller finished processing message: " message)
+    (log/trace "[bureaucrat/ironmq] Background poller: handler-fn finished on message: " (pr-str message))
     (catch Throwable t
-      (log/error "[bureaucrat/ironmq] Background poller: error processing message " message
+      (log/error "[bureaucrat/ironmq] Background poller: handler-fn threw an error processing message " (pr-str message)
                  " - " (log/throwable t))
       (util/send-to-dlq! transport message))))
 
@@ -147,12 +148,14 @@
                                      (when (> message-count 0)
                                        (log/debug (log-prefix component) " Background message poller got "  message-count " messages.")
                                        (doseq [m messages]
+                                         (log/debug (log-prefix component) " Dispatching message:" (pr-str m))
                                          ;; Don't send empty messages, because the receiver end
                                          ;; uses a null next-message to determine when the channel has been closed.
                                          ;; It would therefore be fatally confused by an actually open channel that
                                          ;; sends an empty message. So, messages in Bureaucrat are by definition non-empty.
-                                         (if (empty? m)
-                                           (log/warn "[bureaucrat/ironmq] Got empty message, ignoring it.")
+                                         ;; Note that "\n" also confuses the receiver, so we consider whitespace to be empty.
+                                         (if (empty? (trim m))
+                                           (log/warn  (log-prefix component) " Got empty message, ignoring it.")
                                            (>!! buffer-channel m)))))
 
                                    (Thread/sleep poll-sleep-time)
